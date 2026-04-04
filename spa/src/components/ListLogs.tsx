@@ -613,15 +613,15 @@ export default function ListLogs({ className }: ListLogsProps) {
                     <div className="flex items-center gap-4 text-sm">
                       <label>
                         Rs{" "}
-                        {booking.outstanding == 0
-                          ? booking.paid.toLocaleString("en-IN")
-                          : booking.outstanding.toLocaleString("en-IN")}
+                        {(booking.outstanding ?? 0) == 0
+                          ? (booking.paid ?? 0).toLocaleString("en-IN")
+                          : (booking.outstanding ?? 0).toLocaleString("en-IN")}
                       </label>
                       {booking.status == "Confirmed" && (
                         <div
-                          className={`${booking.outstanding == 0 ? " bg-green-500/30" : "bg-error/20"} px-3 rounded-xl`}
+                          className={`${(booking.outstanding ?? 0) == 0 ? " bg-green-500/30" : "bg-error/20"} px-3 rounded-xl`}
                         >
-                          {booking.outstanding == 0 ? "Paid" : "Unpaid"}
+                          {(booking.outstanding ?? 0) == 0 ? "Paid" : "Unpaid"}
                         </div>
                       )}
                     </div>

@@ -664,15 +664,19 @@ export default function ListLogs({ className }: ListLogsProps) {
                       <div className="flex items-center gap-4 text-sm mt-3">
                         <label>
                           Rs{" "}
-                          {booking.outstanding == 0
-                            ? booking.paid.toLocaleString("en-IN")
-                            : booking.outstanding.toLocaleString("en-IN")}
+                          {(booking.outstanding ?? 0) == 0
+                            ? (booking.paid ?? 0).toLocaleString("en-IN")
+                            : (booking.outstanding ?? 0).toLocaleString(
+                                "en-IN"
+                              )}
                         </label>
                         {booking.status == "Confirmed" && (
                           <div
-                            className={`${booking.outstanding == 0 ? " bg-[#DEF8E0] text-[#09DC44]" : "bg-error/20 text-error"} px-[18px] rounded-[5px] py-1 font-semibold`}
+                            className={`${(booking.outstanding ?? 0) == 0 ? " bg-[#DEF8E0] text-[#09DC44]" : "bg-error/20 text-error"} px-[18px] rounded-[5px] py-1 font-semibold`}
                           >
-                            {booking.outstanding == 0 ? "Paid" : "Unpaid"}
+                            {(booking.outstanding ?? 0) == 0
+                              ? "Paid"
+                              : "Unpaid"}
                           </div>
                         )}
                       </div>
