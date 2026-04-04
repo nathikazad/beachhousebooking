@@ -8,23 +8,53 @@ import BaseSelect from "@/components/ui/BaseSelect";
 import { supabase } from "@/utils/supabase/client";
 import IncomeFromCheckin from "./IncomeFromCheckin";
 
-// define month type
-type Month = "June" | "July" | "August" | "September" | "October" | "November" | "December"
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+type Month = (typeof MONTH_NAMES)[number];
+
 export interface StatsState {
   filter: {
-    month: Month,
-    employee: "Thejas" | "Yasmeen" | "Rafica" | "Indhu" | null
-    referral: "Google" | "Instagram" | "Facebook" | "Other" | null
-  }
-  rawReservationsResponse: any,
-  rawCheckinsResponse: any
+    month: Month;
+    year: number;
+    employee: "Thejas" | "Yasmeen" | "Rafica" | "Indhu" | null;
+    referral: "Google" | "Instagram" | "Facebook" | "Other" | null;
+  };
+  rawReservationsResponse: any;
+  rawCheckinsResponse: any;
 }
 
-const monthConvert: { [key in Month]: number } = { "June": 6, "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12 };
+const monthConvert: { [key in Month]: number } = MONTH_NAMES.reduce(
+  (acc, name, i) => {
+    acc[name] = i + 1;
+    return acc;
+  },
+  {} as { [key in Month]: number }
+);
 
 function getCurrentMonth(): Month {
-  const monthIndex = new Date().getMonth() + 1; // JavaScript months are 0-based, add 1 to match the dictionary values
-  return Object.keys(monthConvert).find(key => monthConvert[key as Month] === monthIndex) as Month;
+  return MONTH_NAMES[new Date().getMonth()];
+}
+
+function getYearSelectOptions(): { label: string; value: string }[] {
+  const current = new Date().getFullYear();
+  const options: { label: string; value: string }[] = [];
+  for (let y = current - 5; y <= current + 1; y++) {
+    options.push({ label: String(y), value: String(y) });
+  }
+  return options;
 }
 
 
@@ -43,7 +73,7 @@ export default function StatsView() {
     supabase
       .rpc("get_booking_stats", {
         month: monthConvert[formState.filter.month],
-        year: new Date().getFullYear(),
+        year: formState.filter.year,
         employee: formState.filter.employee,
         referral: formState.filter.referral,
       })
@@ -63,7 +93,7 @@ export default function StatsView() {
     supabase
       .rpc("get_checkin_stats", {
         month: monthConvert[formState.filter.month],
-        year: new Date().getFullYear(),
+        year: formState.filter.year,
         employee: formState.filter.employee,
         referral: formState.filter.referral,
       })
@@ -85,6 +115,7 @@ export default function StatsView() {
   const [formState, setFormState] = useState<StatsState>({
     filter: {
       month: getCurrentMonth(),
+      year: new Date().getFullYear(),
       employee: null,
       referral: null,
     },
@@ -131,6 +162,7 @@ export default function StatsView() {
       ...prevState,
       filter: {
         month: getCurrentMonth(),
+        year: new Date().getFullYear(),
         employee: null,
         referral: null,
       },
@@ -153,7 +185,7 @@ export default function StatsView() {
           arrow_back
         </span>
         <h1 className="text-lg font-bold leading-6 w-full text-center ">
-          Report for {formState.filter.month}
+          Report for {formState.filter.month} {formState.filter.year}
         </h1>
         <span
           className="material-symbols-filled text-2xl cursor-pointer"
@@ -164,7 +196,7 @@ export default function StatsView() {
       </div>
       <div className="flex flex-col gap-5">
         <h1 className="title-xl text-typo_dark-300 ">
-          Summary for {formState.filter.month}
+          Summary for {formState.filter.month} {formState.filter.year}
         </h1>
         <div className="flex flex-col  gap-5">
           <div className="flex gap-5">
@@ -351,6 +383,21 @@ export default function StatsView() {
             }))}
             onChange={(value) => filterChange({ name: "month", value: value })}
             name="month"
+          />
+
+          <label className="subheading laptop-up:!font-medium laptop-up:text-base">
+            Year
+          </label>
+          <BaseSelect
+            value={String(formState.filter.year)}
+            data={getYearSelectOptions()}
+            onChange={(value) =>
+              setFormState((prev) => ({
+                ...prev,
+                filter: { ...prev.filter, year: Number(value) },
+              }))
+            }
+            name="year"
           />
 
           {/* Referrals */}
