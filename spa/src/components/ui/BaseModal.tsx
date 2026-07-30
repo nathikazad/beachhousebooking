@@ -43,7 +43,7 @@ const BaseModalComponent: React.FC<BaseModalProps> = ({
       >
         <Modal.Body>
           <RemindIcon style={{ color: "#ffb300", fontSize: 24 }} />
-          {message}
+          <span className="whitespace-pre-line">{message}</span>
         </Modal.Body>
         <Modal.Footer>
           <Button onClick={onOk ? onOk : handleClose} appearance="primary" loading={loading} >

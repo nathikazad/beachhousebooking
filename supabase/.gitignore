@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+# Generated production audit reports can contain customer information.
+audits/output/

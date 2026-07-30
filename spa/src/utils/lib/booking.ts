@@ -1,49 +1,35 @@
 
 import { User } from "./auth";
 
-import { deleteEvent, listEvents } from "./calendar/calendarApi";
 import { addToCalendar, deleteCalendarEvents } from "./calendar/calendarLogic";
-import { BookingDB, BookingForm, getCalendarKey, convertIndianTimeToUTC, printInIndianTime } from "./bookingType";
-import { createBooking, fetchBooking, updateBooking } from "./db";
+import { BookingDB, BookingForm, convertIndianTimeToUTC } from "./bookingType";
+import { createBooking, fetchBooking, findBookingConflicts, updateBooking } from "./db";
 import { query } from "./helper";
+import {
+  BookingConflict,
+  BookingConflictError,
+  formatBookingConflictMessage,
+} from "./occupancy";
 
 function capitalizeString(str: string): string {
   return str.replace(/\b\w/g, l => l.toUpperCase());
 }
 
 // return boolean and error if double booking is detected
-export async function checkForDoubleBooking(booking: BookingDB): Promise<{ doubleBooking: boolean, error?: string }> {
-  if (booking.bookingType == 'Stay') {
-    for (let property of booking.properties) {
-      let events = await listEvents(property, booking.startDateTime, booking.endDateTime);
-      events = events.filter((e) => {
-        return booking.calendarIds
-          ? booking.calendarIds[property] !== e.id
-          : true;
-      });
-      
-      if (events.length > 0) {
-        const summaries = events.map(event => event.summary).join(', ');
-        return { doubleBooking: true, error: `Double booking detected(${events.length}) for this ${property} from ${printInIndianTime(booking.startDateTime)} to ${printInIndianTime(booking.endDateTime)}.\n ${summaries} ` };
-      }
-    }
-  } else {
-    for (let event of booking.events) {
-      for (let property of event.properties) {
-        let events = await listEvents(property, event.startDateTime, event.endDateTime);
-        events = events.filter((e) => {
-          return event.calendarIds
-            ? event.calendarIds[property] !== e.id
-            : true;
-        });
-        
-        if (events.length > 0) {
-          return { doubleBooking: true, error: `Double booking detected for this booking for event ${event.eventName}, property ${property} for dates ${event.startDateTime} to ${event.endDateTime}` };
-        }
-      }
-    }
-  }
-  return { doubleBooking: false };
+export async function checkForDoubleBooking(booking: BookingDB): Promise<{
+  doubleBooking: boolean;
+  conflicts: BookingConflict[];
+  error?: string;
+}> {
+  const conflicts = await findBookingConflicts(booking);
+  return {
+    doubleBooking: conflicts.length > 0,
+    conflicts,
+    error:
+      conflicts.length > 0
+        ? formatBookingConflictMessage(conflicts)
+        : undefined,
+  };
 }
 
 export async function mutateBookingState(booking: BookingForm, user: User): Promise<number> {
@@ -91,9 +77,9 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
     newBooking.clientViewId = Math.floor(Math.random() * 1000000).toString();
   }
   if (newBooking.status == "Confirmed" || newBooking.status == "Preconfirmed") {
-    let { doubleBooking, error } = await checkForDoubleBooking(newBooking);
+    const { doubleBooking, conflicts } = await checkForDoubleBooking(newBooking);
     if (doubleBooking) {
-      throw new Error(error);
+      throw new BookingConflictError(conflicts);
     }
   }
 
@@ -101,14 +87,40 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
     console.log("mutateBookingState modify booking")
     await addToCalendar(newBooking);
 
-    await modifyExistingBooking(newBooking);
+    try {
+      await modifyExistingBooking(newBooking);
+    } catch (error) {
+      return await throwFriendlyConstraintConflict(error, newBooking);
+    }
     return newBooking.bookingId
   } else {
     console.log("mutateBookingState create booking")
     await addToCalendar(newBooking);
-    let bookingId = createBooking(newBooking, user.displayName ?? user.id)
-    return bookingId
+    try {
+      return await createBooking(newBooking, user.displayName ?? user.id);
+    } catch (error) {
+      return await throwFriendlyConstraintConflict(error, newBooking);
+    }
   }
+}
+
+async function throwFriendlyConstraintConflict(
+  error: unknown,
+  booking: BookingDB
+): Promise<never> {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "23P01"
+  ) {
+    const conflicts = await findBookingConflicts(booking);
+    if (conflicts.length > 0) {
+      throw new BookingConflictError(conflicts);
+    }
+  }
+
+  throw error;
 }
 
 async function modifyExistingBooking(newBooking: BookingDB) {

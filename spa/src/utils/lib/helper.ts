@@ -49,6 +49,35 @@ export async function query(text: string, params?: any[]): Promise<any> {
   }
 }
 
+export interface QueryExecutor {
+  query: (
+    text: string,
+    params?: any[]
+  ) => Promise<{ rows: any[] }>;
+}
+
+export async function withTransaction<T>(
+  callback: (client: QueryExecutor) => Promise<T>
+): Promise<T> {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+  });
+
+  await client.connect();
+
+  try {
+    await client.query("BEGIN");
+    const result = await callback(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 export function removeSpacesAndCapitalize(str:string) {
   return decodeURIComponent(str)
       .split(' ') // Split the string into an array of words

@@ -1,5 +1,6 @@
 import { BookingForm } from '@/utils/lib/bookingType';
 import { deleteBooking, mutateBookingState } from '@/utils/lib/booking';
+import { BookingConflictError } from '@/utils/lib/occupancy';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { fetchUser, saveUser, verifyAndGetPayload } from '@/utils/lib/auth';
 
@@ -40,6 +41,13 @@ const handlePost = async (req: NextApiRequest, res: NextApiResponse) => {
     res.status(200).json({ bookingId });
   } catch (error) {
     console.error('Error creating booking:', error);
+    if (error instanceof BookingConflictError) {
+      return res.status(409).json({
+        error: "BOOKING_CONFLICT",
+        message: error.message,
+        conflicts: error.conflicts,
+      });
+    }
     return res.status(500).json({ error: "Error creating booking", message: (error as Error).message });
   }
 }
