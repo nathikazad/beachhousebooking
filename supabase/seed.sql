@@ -1,0 +1,3 @@
+-- Intentionally empty.
+-- Production reservation data, Auth users, and Storage objects are not copied
+-- into the repository.
