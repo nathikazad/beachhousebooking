@@ -6,6 +6,7 @@ import {
     BookingOccupancyStatus,
     normalizeBookingToOccupancies,
 } from "./occupancy";
+import { AuditedBookingConflict } from "./conflictAudit";
 
 function toISOString(value: string | Date): string {
     return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -108,6 +109,60 @@ export async function findBookingConflicts(
             property: row.property,
             existingStartsAt: toISOString(row.existing_starts_at),
             existingEndsAt: toISOString(row.existing_ends_at),
+            overlapStartsAt: toISOString(row.overlap_starts_at),
+            overlapEndsAt: toISOString(row.overlap_ends_at),
+        })
+    );
+}
+
+export async function fetchUpcomingBookingConflicts(): Promise<
+    AuditedBookingConflict[]
+> {
+    const rows = await query(
+        `
+        SELECT *
+        FROM public.audit_booking_conflicts(false, now())`
+    );
+
+    return rows.map(
+        (row: {
+            first_booking_id: string | number;
+            first_client_name: string;
+            first_status: BookingOccupancyStatus;
+            first_event_key: string;
+            first_event_name: string;
+            first_starts_at: string | Date;
+            first_ends_at: string | Date;
+            second_booking_id: string | number;
+            second_client_name: string;
+            second_status: BookingOccupancyStatus;
+            second_event_key: string;
+            second_event_name: string;
+            second_starts_at: string | Date;
+            second_ends_at: string | Date;
+            property: string;
+            overlap_starts_at: string | Date;
+            overlap_ends_at: string | Date;
+        }): AuditedBookingConflict => ({
+            firstBooking: {
+                bookingId: Number(row.first_booking_id),
+                clientName: row.first_client_name,
+                status: row.first_status,
+                eventKey: row.first_event_key,
+                eventName: row.first_event_name,
+                startsAt: toISOString(row.first_starts_at),
+                endsAt: toISOString(row.first_ends_at),
+            },
+            secondBooking: {
+                bookingId: Number(row.second_booking_id),
+                clientName: row.second_client_name,
+                status: row.second_status,
+                eventKey: row.second_event_key,
+                eventName: row.second_event_name,
+                startsAt: toISOString(row.second_starts_at),
+                endsAt: toISOString(row.second_ends_at),
+            },
+            property: row.property,
             overlapStartsAt: toISOString(row.overlap_starts_at),
             overlapEndsAt: toISOString(row.overlap_ends_at),
         })

@@ -65,6 +65,15 @@ export default function Settings() {
           <span>Reports</span>
         </LoadingButton>
         <LoadingButton
+          className="border-[1px] border-error text-error w-full py-2 px-4 rounded-lg mb-4"
+          onClick={() => router.push("/protected/settings/double-bookings")}
+        >
+          <span className="material-symbols-outlined text-error">
+            event_busy
+          </span>
+          <span>Double bookings</span>
+        </LoadingButton>
+        <LoadingButton
           className=" border-[1px] border-error text-error w-full py-2 px-4 rounded-lg"
           onClick={signOut}
         >

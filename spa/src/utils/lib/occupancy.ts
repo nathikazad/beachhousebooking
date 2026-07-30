@@ -128,7 +128,7 @@ export function normalizeBookingToOccupancies(
   });
 }
 
-function formatInIndianTime(value: string): string {
+export function formatInIndianTime(value: string): string {
   return new Intl.DateTimeFormat("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -136,7 +136,7 @@ function formatInIndianTime(value: string): string {
   }).format(new Date(value));
 }
 
-function displayProperty(property: string): string {
+export function displayProperty(property: string): string {
   const labels: Record<string, string> = {
     bluehouse: "Bluehouse",
     glasshouse: "Glasshouse",
