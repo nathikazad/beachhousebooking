@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   availableCheckInAuditYears,
   CHECK_IN_AUDIT_MONTHS,
   CHECK_IN_AUDIT_TABS,
-  CheckInAuditRow,
   CheckInAuditTabId,
   formatCheckInAuditDate,
   formatCheckInAuditMoney,
@@ -13,51 +18,61 @@ import {
   rowsForCheckInAuditPeriod,
   rowsForCheckInAuditTab,
 } from "@/utils/lib/checkInAudit";
+import {
+  CheckInAuditResponse,
+  loadCheckInAuditCached,
+  readCheckInAuditCache,
+} from "@/utils/lib/checkInAuditCache";
 import { supabase } from "@/utils/supabase/client";
-
-interface CheckInAuditResponse {
-  generatedAt: string;
-  rows: CheckInAuditRow[];
-}
 
 export default function CheckInAuditPage() {
   const router = useRouter();
+  const initialAudit = useRef(readCheckInAuditCache());
   const currentPeriod = useMemo(
     () => getCurrentCheckInAuditPeriod(),
     []
   );
-  const [audit, setAudit] = useState<CheckInAuditResponse | null>(null);
+  const [audit, setAudit] = useState<CheckInAuditResponse | null>(
+    initialAudit.current
+  );
   const [activeTab, setActiveTab] =
     useState<CheckInAuditTabId>("blue-glass");
   const [selectedMonth, setSelectedMonth] = useState(
     currentPeriod.month
   );
   const [selectedYear, setSelectedYear] = useState(currentPeriod.year);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialAudit.current === null);
   const [error, setError] = useState("");
 
-  const loadAudit = useCallback(async () => {
+  const loadAudit = useCallback(async (force = false) => {
     setLoading(true);
     setError("");
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error("Please sign in again to view the check-in audit.");
-      }
+      const data = await loadCheckInAuditCached(async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error(
+            "Please sign in again to view the check-in audit."
+          );
+        }
 
-      const response = await fetch("/api/check-in-audit", {
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Unable to load the check-in audit.");
-      }
+        const response = await fetch("/api/check-in-audit", {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const responseData = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            responseData.message || "Unable to load the check-in audit."
+          );
+        }
+        return responseData;
+      }, force);
       setAudit(data);
     } catch (loadError) {
       setError(
@@ -71,7 +86,9 @@ export default function CheckInAuditPage() {
   }, []);
 
   useEffect(() => {
-    loadAudit();
+    if (!initialAudit.current) {
+      loadAudit();
+    }
   }, [loadAudit]);
 
   const availableYears = useMemo(
@@ -110,7 +127,7 @@ export default function CheckInAuditPage() {
           aria-label="Refresh check-in audit"
           className="flex h-10 w-10 items-center justify-center rounded-full border border-[#BEBEBE]"
           disabled={loading}
-          onClick={loadAudit}
+          onClick={() => loadAudit(true)}
           type="button"
         >
           <span
@@ -186,7 +203,7 @@ export default function CheckInAuditPage() {
           <p className="text-sm text-error">{error}</p>
           <button
             className="mt-3 rounded-lg border border-error px-4 py-2 text-sm font-bold text-error"
-            onClick={loadAudit}
+            onClick={() => loadAudit(true)}
             type="button"
           >
             Try again

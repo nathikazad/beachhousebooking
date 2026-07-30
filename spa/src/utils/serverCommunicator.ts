@@ -3,6 +3,7 @@ import {
   invalidateBookingHistoryCache,
   loadBookingHistoryCached,
 } from "@/utils/lib/bookingHistoryCache";
+import { invalidateCheckInAuditCache } from "@/utils/lib/checkInAuditCache";
 import { invalidateDoubleBookingAuditCache } from "@/utils/lib/doubleBookingAuditCache";
 import { supabase } from "@/utils/supabase/client";
 
@@ -44,6 +45,7 @@ export const createBooking = async (bookingForm: BookingForm) => {
     if (bookingId) {
       invalidateBookingHistoryCache(Number(bookingId));
     }
+    invalidateCheckInAuditCache();
     invalidateDoubleBookingAuditCache();
     return bookingId;
 
@@ -114,6 +116,7 @@ export const deleteBooking = async (bookingId: number) => {
     });
     if (response.ok) {
       invalidateBookingHistoryCache(bookingId);
+      invalidateCheckInAuditCache();
       invalidateDoubleBookingAuditCache();
     }
     console.log('Deleted id: ', bookingId);
