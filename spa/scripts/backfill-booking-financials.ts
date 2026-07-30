@@ -6,7 +6,7 @@ import {
   prepareFinancialMigration,
   summarizeFinancialMigrations,
 } from "../src/utils/lib/financialMigration";
-import { replaceFinancialRecords } from "../src/utils/lib/financialPersistence";
+import { replaceFinancialRecordBatch } from "../src/utils/lib/financialPersistence";
 
 loadEnvConfig(process.cwd());
 
@@ -18,26 +18,35 @@ function readBatchSize(): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 100;
 }
 
-async function lockLegacyBooking(
+async function lockLegacyBookings(
   client: Client,
-  bookingId: number
-): Promise<boolean> {
-  const { rows } = await client.query<{ encoding_version: number }>(
+  bookingIds: number[]
+): Promise<Set<number>> {
+  const { rows } = await client.query<{
+    id: string | number;
+    encoding_version: number;
+  }>(
     `
-    SELECT coalesce(
-      nullif(
-        json[array_upper(json, 1)] ->> 'encodingVersion',
-        ''
-      )::integer,
-      1
-    ) AS encoding_version
+    SELECT
+      id,
+      coalesce(
+        nullif(
+          json[array_upper(json, 1)] ->> 'encodingVersion',
+          ''
+        )::integer,
+        1
+      ) AS encoding_version
     FROM public.bookings
-    WHERE id = $1
+    WHERE id = ANY($1::bigint[])
     FOR UPDATE`,
-    [bookingId]
+    [bookingIds]
   );
 
-  return rows.length > 0 && rows[0].encoding_version < 2;
+  return new Set(
+    rows
+      .filter((row) => row.encoding_version < 2)
+      .map((row) => Number(row.id))
+  );
 }
 
 async function verifyAppliedCounts(
@@ -170,18 +179,20 @@ async function main() {
         const batch = prepared.slice(index, index + batchSize);
         await client.query("BEGIN");
         try {
-          const applied: PreparedFinancialMigration[] = [];
-          for (const booking of batch) {
-            if (!(await lockLegacyBooking(client, booking.bookingId))) {
-              continue;
-            }
-            await replaceFinancialRecords(
-              client,
-              booking.bookingId,
-              booking.financials
-            );
-            applied.push(booking);
-          }
+          const legacyBookingIds = await lockLegacyBookings(
+            client,
+            batch.map((booking) => booking.bookingId)
+          );
+          const applied = batch.filter((booking) =>
+            legacyBookingIds.has(booking.bookingId)
+          );
+          await replaceFinancialRecordBatch(
+            client,
+            applied.map((booking) => ({
+              bookingId: booking.bookingId,
+              financials: booking.financials,
+            }))
+          );
           if (applied.length > 0) {
             await verifyAppliedCounts(client, applied);
           }

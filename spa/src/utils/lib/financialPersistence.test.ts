@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { Property } from "./bookingType";
-import { replaceFinancialRecords } from "./financialPersistence";
+import {
+  replaceFinancialRecordBatch,
+  replaceFinancialRecords,
+} from "./financialPersistence";
 
 function executor() {
   const query = vi.fn(
@@ -93,5 +96,60 @@ describe("replaceFinancialRecords", () => {
     expect(database.query.mock.calls.slice(0, 6)).toEqual(
       database.query.mock.calls.slice(6, 12)
     );
+  });
+});
+
+describe("replaceFinancialRecordBatch", () => {
+  it("replaces a complete batch with bulk statements", async () => {
+    const database = executor();
+
+    await replaceFinancialRecordBatch(database, [
+      { bookingId: 42, financials },
+      {
+        bookingId: 43,
+        financials: {
+          costItems: [
+            {
+              property: Property.Bluehouse,
+              itemType: "cost",
+              name: "Cleaning",
+              amount: 250,
+            },
+          ],
+          payments: [],
+          securityDeposit: null,
+        },
+      },
+    ]);
+
+    expect(database.query).toHaveBeenNthCalledWith(
+      1,
+      "DELETE FROM public.booking_cost_items WHERE booking_id = ANY($1::bigint[])",
+      [[42, 43]]
+    );
+    const costPayload = JSON.parse(
+      database.query.mock.calls[3][1]?.[0] as string
+    );
+    expect(costPayload).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          booking_id: 42,
+          property: "castle",
+        }),
+        expect.objectContaining({
+          booking_id: 43,
+          property: "bluehouse",
+        }),
+      ])
+    );
+    expect(database.query).toHaveBeenCalledTimes(6);
+  });
+
+  it("does nothing for an empty batch", async () => {
+    const database = executor();
+
+    await replaceFinancialRecordBatch(database, []);
+
+    expect(database.query).not.toHaveBeenCalled();
   });
 });
