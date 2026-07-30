@@ -1,4 +1,8 @@
 import { BookingDB, BookingForm } from "@/utils/lib/bookingType";
+import {
+  invalidateBookingHistoryCache,
+  loadBookingHistoryCached,
+} from "@/utils/lib/bookingHistoryCache";
 import { invalidateDoubleBookingAuditCache } from "@/utils/lib/doubleBookingAuditCache";
 import { supabase } from "@/utils/supabase/client";
 
@@ -37,6 +41,9 @@ export const createBooking = async (bookingForm: BookingForm) => {
     if (data.error) {
       return Promise.reject({ msg: data.message, error: true })
     }
+    if (bookingId) {
+      invalidateBookingHistoryCache(Number(bookingId));
+    }
     invalidateDoubleBookingAuditCache();
     return bookingId;
 
@@ -48,6 +55,18 @@ export const createBooking = async (bookingForm: BookingForm) => {
 }
 
 export async function getBookingHistory(
+  identifier: { bookingId: number } | { clientViewId: string }
+): Promise<BookingDB[]> {
+  if ("bookingId" in identifier) {
+    return loadBookingHistoryCached(identifier.bookingId, () =>
+      fetchBookingHistory(identifier)
+    );
+  }
+
+  return fetchBookingHistory(identifier);
+}
+
+async function fetchBookingHistory(
   identifier: { bookingId: number } | { clientViewId: string }
 ): Promise<BookingDB[]> {
   const query = new URLSearchParams(
@@ -94,6 +113,7 @@ export const deleteBooking = async (bookingId: number) => {
       body: JSON.stringify({ bookingId })
     });
     if (response.ok) {
+      invalidateBookingHistoryCache(bookingId);
       invalidateDoubleBookingAuditCache();
     }
     console.log('Deleted id: ', bookingId);
