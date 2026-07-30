@@ -5,6 +5,7 @@ import {
   formatPairConflictMessage,
   groupBookingConflicts,
 } from "./conflictAudit";
+import { bookingPreviewHref } from "./bookingNavigation";
 
 function period(
   bookingId: number,
@@ -153,5 +154,13 @@ describe("formatPairConflictMessage", () => {
     expect(message).toContain("booking #202 (Bob)");
     expect(message).toContain("1 Aug 2026, 3:30 pm");
     expect(message).toContain("1 Aug 2026, 5:30 pm");
+  });
+});
+
+describe("bookingPreviewHref", () => {
+  it("uses the server-resolvable SPA route and preserves the return path", () => {
+    expect(bookingPreviewHref(3046)).toBe(
+      "/protected/booking/%5Bid%5D?id=3046&returnTo=%2Fprotected%2Fsettings%2Fdouble-bookings"
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { BookingForm } from "@/utils/lib/bookingType";
+import { invalidateDoubleBookingAuditCache } from "@/utils/lib/doubleBookingAuditCache";
 import { supabase } from "@/utils/supabase/client";
-;
+
 export const monthConvertFromNumber: Record<number, string> = {
   1: "january",
   2: "february",
@@ -36,6 +37,7 @@ export const createBooking = async (bookingForm: BookingForm) => {
     if (data.error) {
       return Promise.reject({ msg: data.message, error: true })
     }
+    invalidateDoubleBookingAuditCache();
     return bookingId;
 
   } catch (error) {
@@ -59,6 +61,9 @@ export const deleteBooking = async (bookingId: number) => {
       },
       body: JSON.stringify({ bookingId })
     });
+    if (response.ok) {
+      invalidateDoubleBookingAuditCache();
+    }
     console.log('Deleted id: ', bookingId);
 
   } catch (error) {

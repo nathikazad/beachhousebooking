@@ -144,5 +144,5 @@ export async function deleteBooking(bookingId: number) {
   let lastIndexOfJson = bookings[0].json.length - 1;
   let booking = bookings[0].json[lastIndexOfJson] as BookingDB;
   await deleteCalendarEvents(booking)
-  query('DELETE FROM bookings WHERE id = $1', [bookingId]);
+  await query('DELETE FROM bookings WHERE id = $1', [bookingId]);
 }

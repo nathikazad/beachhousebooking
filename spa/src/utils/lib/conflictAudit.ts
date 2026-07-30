@@ -39,6 +39,13 @@ export interface BookingConflictGroup {
   message: string;
 }
 
+export interface DoubleBookingAuditResponse {
+  generatedAt: string;
+  conflictPeriodCount: number;
+  conflictGroupCount: number;
+  groups: BookingConflictGroup[];
+}
+
 function periodIdentity(booking: AuditedBookingPeriod): string {
   return `${booking.bookingId}:${booking.eventKey}`;
 }

@@ -1,22 +1,28 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useState } from "react";
 import {
-  BookingConflictGroup,
+  MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  DoubleBookingAuditResponse,
   formatPairConflictMessage,
 } from "@/utils/lib/conflictAudit";
+import {
+  bookingPreviewHref,
+  DOUBLE_BOOKING_AUDIT_RETURN_PATH,
+} from "@/utils/lib/bookingNavigation";
+import {
+  readDoubleBookingAuditCache,
+  writeDoubleBookingAuditCache,
+} from "@/utils/lib/doubleBookingAuditCache";
 import {
   displayProperty,
   formatInIndianTime,
 } from "@/utils/lib/occupancy";
 import { supabase } from "@/utils/supabase/client";
-
-interface DoubleBookingAuditResponse {
-  generatedAt: string;
-  conflictPeriodCount: number;
-  conflictGroupCount: number;
-  groups: BookingConflictGroup[];
-}
 
 function displayStatus(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
@@ -28,8 +34,11 @@ function displayEventName(eventName: string): string {
 
 export default function DoubleBookingsPage() {
   const router = useRouter();
-  const [audit, setAudit] = useState<DoubleBookingAuditResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialAudit = useRef(readDoubleBookingAuditCache());
+  const [audit, setAudit] = useState<DoubleBookingAuditResponse | null>(
+    initialAudit.current
+  );
+  const [loading, setLoading] = useState(initialAudit.current === null);
   const [error, setError] = useState("");
 
   const loadDoubleBookings = useCallback(async () => {
@@ -46,6 +55,7 @@ export default function DoubleBookingsPage() {
       }
 
       const response = await fetch("/api/booking-conflicts", {
+        cache: "no-store",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -56,6 +66,7 @@ export default function DoubleBookingsPage() {
         throw new Error(data.message || "Unable to load double bookings.");
       }
 
+      writeDoubleBookingAuditCache(data);
       setAudit(data);
     } catch (loadError) {
       setError(
@@ -69,8 +80,33 @@ export default function DoubleBookingsPage() {
   }, []);
 
   useEffect(() => {
-    loadDoubleBookings();
+    if (!initialAudit.current) {
+      loadDoubleBookings();
+    }
   }, [loadDoubleBookings]);
+
+  const openBooking = (
+    event: MouseEvent<HTMLAnchorElement>,
+    bookingId: number
+  ) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    router.push({
+      pathname: `/protected/booking/${bookingId}`,
+      query: {
+        returnTo: DOUBLE_BOOKING_AUDIT_RETURN_PATH,
+      },
+    });
+  };
 
   return (
     <div className="flex w-full flex-col gap-5 pb-8 laptop-up:px-10">
@@ -173,16 +209,13 @@ export default function DoubleBookingsPage() {
                   <div className="flex flex-col gap-4 p-4">
                     <div className="grid gap-3 laptop-up:grid-cols-2">
                       {group.bookings.map((booking) => (
-                        <Link
+                        <a
                           className="rounded-xl border border-[#BEBEBE] p-4 text-inherit hover:no-underline"
-                          href={{
-                            pathname: `/protected/booking/${booking.bookingId}`,
-                            query: {
-                              returnTo:
-                                "/protected/settings/double-bookings",
-                            },
-                          }}
+                          href={bookingPreviewHref(booking.bookingId)}
                           key={booking.bookingId}
+                          onClick={(event) =>
+                            openBooking(event, booking.bookingId)
+                          }
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
@@ -219,7 +252,7 @@ export default function DoubleBookingsPage() {
                               arrow_forward
                             </span>
                           </div>
-                        </Link>
+                        </a>
                       ))}
                     </div>
 

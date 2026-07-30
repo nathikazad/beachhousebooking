@@ -28,7 +28,7 @@ vi.mock("./helper", () => ({
   query: mocks.query,
 }));
 
-import { mutateBookingState } from "./booking";
+import { deleteBooking, mutateBookingState } from "./booking";
 
 function confirmedStay(): BookingForm {
   return {
@@ -124,5 +124,48 @@ describe("mutateBookingState conflict validation", () => {
 
     expect(mocks.addToCalendar).toHaveBeenCalledOnce();
     expect(mocks.createBooking).toHaveBeenCalledOnce();
+  });
+});
+
+describe("deleteBooking", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.deleteCalendarEvents.mockResolvedValue(undefined);
+  });
+
+  it("does not resolve until the SQL deletion has completed", async () => {
+    let completeSqlDelete!: (rows: unknown[]) => void;
+    const pendingSqlDelete = new Promise<unknown[]>((resolve) => {
+      completeSqlDelete = resolve;
+    });
+
+    mocks.query
+      .mockResolvedValueOnce([
+        {
+          json: [{ ...confirmedStay(), bookingId: 2794 }],
+        },
+      ])
+      .mockReturnValueOnce(pendingSqlDelete);
+
+    let deletionResolved = false;
+    const deletion = deleteBooking(2794).then(() => {
+      deletionResolved = true;
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.query).toHaveBeenNthCalledWith(
+        2,
+        "DELETE FROM bookings WHERE id = $1",
+        [2794]
+      );
+    });
+    await Promise.resolve();
+
+    expect(deletionResolved).toBe(false);
+
+    completeSqlDelete([]);
+    await deletion;
+
+    expect(deletionResolved).toBe(true);
   });
 });

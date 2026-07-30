@@ -8,11 +8,22 @@ const nextConfig = {
 };
 
 // Configuration object tells the next-pwa plugin
+const defaultRuntimeCaching = require("next-pwa/cache");
 const withPWA = require("next-pwa")({
   dest: "public", // Destination directory for the PWA files
   disable: process.env.NODE_ENV === "development", // Disable PWA in development mode
   register: true, // Register the PWA service worker
   skipWaiting: true, // Skip waiting for service worker activation
+  runtimeCaching: [
+    {
+      urlPattern: ({ url }) =>
+        url.origin === self.location.origin &&
+        url.pathname === "/api/booking-conflicts",
+      handler: "NetworkOnly",
+      method: "GET",
+    },
+    ...defaultRuntimeCaching,
+  ],
 });
 
 // Export the combined configuration for Next.js with PWA support
