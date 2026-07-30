@@ -465,7 +465,7 @@ export async function fetchCheckInAudit(): Promise<CheckInAuditRow[]> {
           booking.properties,
           totals.tax,
           totals.after_tax_total
-        ORDER BY booking.check_in DESC, booking.id DESC`
+        ORDER BY booking.check_in ASC, booking.id ASC`
     );
 
     return (rows as CheckInAuditDatabaseRow[]).map(buildCheckInAuditRow);

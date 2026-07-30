@@ -205,12 +205,20 @@ export function rowsForCheckInAuditPeriod(
   rows: CheckInAuditRow[],
   period: CheckInAuditPeriod
 ): CheckInAuditRow[] {
-  return rows.filter((row) => {
-    const rowPeriod = getCheckInAuditPeriod(row.checkInDate);
-    return (
-      rowPeriod.month === period.month && rowPeriod.year === period.year
-    );
-  });
+  return rows
+    .filter((row) => {
+      const rowPeriod = getCheckInAuditPeriod(row.checkInDate);
+      return (
+        rowPeriod.month === period.month &&
+        rowPeriod.year === period.year
+      );
+    })
+    .sort((first, second) => {
+      const dateDifference =
+        new Date(first.checkInDate).getTime() -
+        new Date(second.checkInDate).getTime();
+      return dateDifference || first.bookingId - second.bookingId;
+    });
 }
 
 export function availableCheckInAuditYears(

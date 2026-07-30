@@ -152,6 +152,41 @@ describe("check-in audit rows", () => {
     ).toEqual([1]);
   });
 
+  it("orders the selected month by earliest check-in first", () => {
+    const rows = [
+      {
+        bookingId: 3,
+        checkInDate: "2026-08-20T10:00:00.000Z",
+        clientName: "Later",
+        properties: [Property.Castle],
+        advanceAmount: 0,
+        advanceReceivedDate: null,
+        remainingPaymentAmount: 0,
+        remainingPaymentReceivedDate: null,
+        tax: 0,
+        total: 1000,
+      },
+      {
+        bookingId: 2,
+        checkInDate: "2026-08-01T10:00:00.000Z",
+        clientName: "Earlier",
+        properties: [Property.Castle],
+        advanceAmount: 0,
+        advanceReceivedDate: null,
+        remainingPaymentAmount: 0,
+        remainingPaymentReceivedDate: null,
+        tax: 0,
+        total: 1000,
+      },
+    ];
+
+    expect(
+      rowsForCheckInAuditPeriod(rows, { month: 8, year: 2026 }).map(
+        (row) => row.bookingId
+      )
+    ).toEqual([2, 3]);
+  });
+
   it("defaults to the current month and year in India time", () => {
     expect(
       getCurrentCheckInAuditPeriod(
