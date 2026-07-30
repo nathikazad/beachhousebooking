@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "db:backfill-occupancies": "tsx scripts/backfill-booking-occupancies.ts",
     "db:backfill-financials": "tsx scripts/backfill-booking-financials.ts",
+    "db:backfill-event-cost-properties": "tsx scripts/backfill-single-property-event-costs.ts",
+    "db:backfill-bluehouse-glasshouse-costs": "tsx scripts/backfill-bluehouse-glasshouse-costs.ts",
     "db:audit-conflicts": "tsx scripts/audit-booking-conflicts.ts",
     "db:audit-pre-migration": "tsx scripts/audit-existing-bookings.ts"
   },

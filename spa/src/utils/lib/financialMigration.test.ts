@@ -119,17 +119,80 @@ describe("prepareFinancialMigration", () => {
     );
 
     expect(result.financials.costItems).toHaveLength(3);
-    expect(
-      result.financials.costItems.every((item) => item.property === undefined)
-    ).toBe(true);
+    expect(result.financials.costItems).toEqual([
+      expect.objectContaining({
+        name: "Cleaning",
+        property: undefined,
+      }),
+      expect.objectContaining({
+        name: "Venue",
+        property: Property.Castle,
+      }),
+      expect.objectContaining({
+        name: "Tax",
+        property: undefined,
+      }),
+    ]);
   });
 
-  it("leaves properties null when the booking has no property", () => {
-    const result = prepareFinancialMigration(row([]));
+  it("leaves an event cost unassigned when that event has multiple properties", () => {
+    const booking = legacyBooking();
+    booking.events[0].properties = [Property.Castle, Property.Bluehouse];
+    const result = prepareFinancialMigration(
+      row(["castle", "bluehouse"], booking)
+    );
 
     expect(
-      result.financials.costItems.every((item) => item.property === undefined)
-    ).toBe(true);
+      result.financials.costItems.find((item) => item.name === "Venue")
+        ?.property
+    ).toBeUndefined();
+  });
+
+  it("defaults Bluehouse and Glasshouse costs to Bluehouse but leaves tax unassigned", () => {
+    const booking = legacyBooking({
+      properties: [Property.Bluehouse, Property.Glasshouse],
+    });
+    booking.events[0].properties = [
+      Property.Bluehouse,
+      Property.Glasshouse,
+    ];
+    const result = prepareFinancialMigration(
+      row(["bluehouse", "glasshouse"], booking)
+    );
+
+    expect(result.financials.costItems).toEqual([
+      expect.objectContaining({
+        name: "Cleaning",
+        property: Property.Bluehouse,
+      }),
+      expect.objectContaining({
+        name: "Venue",
+        property: Property.Bluehouse,
+      }),
+      expect.objectContaining({
+        name: "Tax",
+        property: undefined,
+      }),
+    ]);
+  });
+
+  it("still uses a single event property when the booking has no property", () => {
+    const result = prepareFinancialMigration(row([]));
+
+    expect(result.financials.costItems).toEqual([
+      expect.objectContaining({
+        name: "Cleaning",
+        property: undefined,
+      }),
+      expect.objectContaining({
+        name: "Venue",
+        property: Property.Castle,
+      }),
+      expect.objectContaining({
+        name: "Tax",
+        property: undefined,
+      }),
+    ]);
   });
 
   it("creates tax as its own item and preserves event association", () => {
@@ -324,7 +387,7 @@ describe("summarizeFinancialMigrations", () => {
       bookingRows: 2,
       costItems: 4,
       taxItems: 2,
-      unassignedItems: 3,
+      unassignedItems: 2,
       payments: 2,
       deposits: 2,
       totalCost: 11000,

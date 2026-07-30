@@ -31,9 +31,9 @@ export interface PreparedFinancialMigration {
   issues: FinancialMigrationIssue[];
 }
 
-function legacyProperty(
+function legacyProperties(
   properties: string[] | string | null
-): Property | undefined {
+): Property[] {
   const propertyValues = Array.isArray(properties)
     ? properties
     : typeof properties === "string"
@@ -43,15 +43,34 @@ function legacyProperty(
           .map((property) => property.replace(/^"|"$/g, ""))
           .filter(Boolean)
       : [];
-  const uniqueProperties = Array.from(
+  return Array.from(
     new Set(
       propertyValues
         .map(propertyFromDatabaseValue)
         .filter((property): property is Property => Boolean(property))
     )
   );
+}
 
+function legacyProperty(
+  properties: string[] | string | null
+): Property | undefined {
+  const uniqueProperties = legacyProperties(properties);
   return uniqueProperties.length === 1 ? uniqueProperties[0] : undefined;
+}
+
+function legacyCostProperty(
+  properties: string[] | string | null
+): Property | undefined {
+  const uniqueProperties = legacyProperties(properties);
+  if (uniqueProperties.length === 1) return uniqueProperties[0];
+
+  const isBluehouseAndGlasshouse =
+    uniqueProperties.length === 2 &&
+    uniqueProperties.includes(Property.Bluehouse) &&
+    uniqueProperties.includes(Property.Glasshouse);
+
+  return isBluehouseAndGlasshouse ? Property.Bluehouse : undefined;
 }
 
 function readAmount(value: unknown): number | null {
@@ -283,6 +302,7 @@ export function prepareFinancialMigration(
   }
 
   const property = legacyProperty(row.properties);
+  const costProperty = legacyCostProperty(row.properties);
   const costItems: BookingCostItemRecord[] = [];
 
   (Array.isArray(latest.costs) ? latest.costs : []).forEach((cost, index) => {
@@ -290,7 +310,7 @@ export function prepareFinancialMigration(
       bookingId,
       cost,
       `costs[${index}]`,
-      property,
+      costProperty,
       issues
     );
     if (migrated) costItems.push(migrated);
@@ -298,13 +318,14 @@ export function prepareFinancialMigration(
 
   (Array.isArray(latest.events) ? latest.events : []).forEach(
     (event, eventIndex) => {
+      const eventProperty = legacyCostProperty(event.properties ?? null);
       (Array.isArray(event.costs) ? event.costs : []).forEach(
         (cost, costIndex) => {
           const migrated = migrateCost(
             bookingId,
             cost,
             `events[${eventIndex}].costs[${costIndex}]`,
-            property,
+            eventProperty ?? property,
             issues,
             event.eventId
           );
