@@ -175,7 +175,13 @@ export default function DoubleBookingsPage() {
                       {group.bookings.map((booking) => (
                         <Link
                           className="rounded-xl border border-[#BEBEBE] p-4 text-inherit hover:no-underline"
-                          href={`/protected/booking/${booking.bookingId}`}
+                          href={{
+                            pathname: `/protected/booking/${booking.bookingId}`,
+                            query: {
+                              returnTo:
+                                "/protected/settings/double-bookings",
+                            },
+                          }}
                           key={booking.bookingId}
                         >
                           <div className="flex items-start justify-between gap-3">
