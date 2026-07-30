@@ -25,6 +25,11 @@ import {
     validateBookingFinancials,
 } from "./financials";
 import { replaceFinancialRecords } from "./financialPersistence";
+import {
+    CheckInAuditDatabaseRow,
+    CheckInAuditRow,
+    buildCheckInAuditRow,
+} from "./checkInAudit";
 
 function toISOString(value: string | Date): string {
     return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -423,4 +428,45 @@ export async function fetchBookingByClientViewId(
     }
 
     return hydrateLatestBooking(Number(result[0].id), result[0].json ?? []);
+}
+
+export async function fetchCheckInAudit(): Promise<CheckInAuditRow[]> {
+    const rows = await query(
+        `
+        SELECT
+          booking.id AS booking_id,
+          booking.check_in,
+          booking.client_name,
+          booking.properties,
+          totals.tax,
+          totals.after_tax_total AS total,
+          coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'id', payment.id,
+                'amount', payment.amount,
+                'paymentDate', payment.payment_date
+              )
+              ORDER BY payment.payment_date, payment.id
+            ) FILTER (WHERE payment.id IS NOT NULL),
+            '[]'::jsonb
+          ) AS payments
+        FROM public.bookings booking
+        LEFT JOIN public.booking_financial_totals totals
+          ON totals.booking_id = booking.id
+        LEFT JOIN public.booking_payments payment
+          ON payment.booking_id = booking.id
+        WHERE booking.status = 'confirmed'
+          AND booking.check_in IS NOT NULL
+        GROUP BY
+          booking.id,
+          booking.check_in,
+          booking.client_name,
+          booking.properties,
+          totals.tax,
+          totals.after_tax_total
+        ORDER BY booking.check_in DESC, booking.id DESC`
+    );
+
+    return (rows as CheckInAuditDatabaseRow[]).map(buildCheckInAuditRow);
 }

@@ -18,7 +18,11 @@ const withPWA = require("next-pwa")({
     {
       urlPattern: ({ url }) =>
         url.origin === self.location.origin &&
-        ["/api/booking", "/api/booking-conflicts"].includes(url.pathname),
+        [
+          "/api/booking",
+          "/api/booking-conflicts",
+          "/api/check-in-audit",
+        ].includes(url.pathname),
       handler: "NetworkOnly",
       method: "GET",
     },

@@ -1,0 +1,245 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import {
+  CHECK_IN_AUDIT_TABS,
+  CheckInAuditRow,
+  CheckInAuditTabId,
+  formatCheckInAuditDate,
+  formatCheckInAuditMoney,
+  rowsForCheckInAuditTab,
+} from "@/utils/lib/checkInAudit";
+import { supabase } from "@/utils/supabase/client";
+
+interface CheckInAuditResponse {
+  generatedAt: string;
+  rows: CheckInAuditRow[];
+}
+
+export default function CheckInAuditPage() {
+  const router = useRouter();
+  const [audit, setAudit] = useState<CheckInAuditResponse | null>(null);
+  const [activeTab, setActiveTab] =
+    useState<CheckInAuditTabId>("blue-glass");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadAudit = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Please sign in again to view the check-in audit.");
+      }
+
+      const response = await fetch("/api/check-in-audit", {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to load the check-in audit.");
+      }
+      setAudit(data);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load the check-in audit."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAudit();
+  }, [loadAudit]);
+
+  const rows = useMemo(
+    () =>
+      audit ? rowsForCheckInAuditTab(audit.rows, activeTab) : [],
+    [activeTab, audit]
+  );
+
+  return (
+    <div className="flex w-full flex-col gap-5 pb-8 laptop-up:px-10">
+      <div className="flex h-[72px] items-center gap-3">
+        <button
+          aria-label="Back to settings"
+          className="flex h-10 w-10 items-center justify-center rounded-full"
+          onClick={() => router.push("/protected/settings")}
+          type="button"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </button>
+        <h1 className="flex-1 text-lg font-bold leading-6">
+          Check-in audit
+        </h1>
+        <button
+          aria-label="Refresh check-in audit"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#BEBEBE]"
+          disabled={loading}
+          onClick={loadAudit}
+          type="button"
+        >
+          <span
+            className={`material-symbols-outlined ${
+              loading ? "animate-spin" : ""
+            }`}
+          >
+            refresh
+          </span>
+        </button>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {CHECK_IN_AUDIT_TABS.map((tab) => (
+          <button
+            className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold ${
+              activeTab === tab.id
+                ? "border-selectedButton bg-selectedButton text-white"
+                : "border-[#BEBEBE] bg-white"
+            }`}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && !audit ? (
+        <div className="flex min-h-48 items-center justify-center">
+          <span className="loader-spinner"></span>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-xl border border-error bg-red-50 p-4">
+          <p className="text-sm text-error">{error}</p>
+          <button
+            className="mt-3 rounded-lg border border-error px-4 py-2 text-sm font-bold text-error"
+            onClick={loadAudit}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
+
+      {audit && !error ? (
+        rows.length === 0 ? (
+          <div className="rounded-xl border border-[#BEBEBE] p-6 text-center">
+            <p className="font-bold">No confirmed check-ins</p>
+            <p className="mt-1 text-sm text-typo_light-200">
+              This property has no confirmed booking records.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-xl border border-[#D0D0D0] laptop-up:hidden">
+              <table className="w-full table-fixed text-left text-sm">
+                <thead className="bg-[#F4F4F4]">
+                  <tr>
+                    <th className="w-[30%] px-3 py-3">Date</th>
+                    <th className="w-[42%] px-3 py-3">Name</th>
+                    <th className="w-[28%] px-3 py-3 text-right">
+                      Total
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      className="border-t border-[#E5E5E5]"
+                      key={row.bookingId}
+                    >
+                      <td className="px-3 py-3 text-xs">
+                        {formatCheckInAuditDate(row.checkInDate)}
+                      </td>
+                      <td className="truncate px-3 py-3 font-bold">
+                        {row.clientName}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold">
+                        {formatCheckInAuditMoney(row.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-xl border border-[#D0D0D0] laptop-up:block">
+              <table className="w-full min-w-[1180px] text-left text-sm">
+                <thead className="bg-[#F4F4F4]">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3 text-right">
+                      Advance amount
+                    </th>
+                    <th className="px-4 py-3">
+                      Advance received date
+                    </th>
+                    <th className="px-4 py-3 text-right">
+                      Remaining payment received amount
+                    </th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 text-right">Tax</th>
+                    <th className="px-4 py-3 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      className="border-t border-[#E5E5E5]"
+                      key={row.bookingId}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {formatCheckInAuditDate(row.checkInDate)}
+                      </td>
+                      <td className="px-4 py-3 font-bold">
+                        {row.clientName}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {formatCheckInAuditMoney(row.advanceAmount)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {formatCheckInAuditDate(
+                          row.advanceReceivedDate
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {formatCheckInAuditMoney(
+                          row.remainingPaymentAmount
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {formatCheckInAuditDate(
+                          row.remainingPaymentReceivedDate
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {formatCheckInAuditMoney(row.tax)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-bold">
+                        {formatCheckInAuditMoney(row.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )
+      ) : null}
+    </div>
+  );
+}

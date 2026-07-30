@@ -65,6 +65,17 @@ export default function Settings() {
           <span>Reports</span>
         </LoadingButton>
         <LoadingButton
+          className="mb-4 w-full rounded-lg border-[1px] border-selectedButton px-4 py-2 text-selectedButton"
+          onClick={() =>
+            router.push("/protected/settings/check-in-audit")
+          }
+        >
+          <span className="material-symbols-outlined text-selectedButton">
+            fact_check
+          </span>
+          <span>Check-in audit</span>
+        </LoadingButton>
+        <LoadingButton
           className="border-[1px] border-error text-error w-full py-2 px-4 rounded-lg mb-4"
           onClick={() => router.push("/protected/settings/double-bookings")}
         >
