@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   availableCheckInAuditYears,
@@ -208,10 +209,13 @@ export default function CheckInAuditPage() {
               <table className="w-full table-fixed text-left text-sm">
                 <thead className="bg-[#F4F4F4]">
                   <tr>
-                    <th className="w-[30%] px-3 py-3">Date</th>
-                    <th className="w-[42%] px-3 py-3">Name</th>
-                    <th className="w-[28%] px-3 py-3 text-right">
+                    <th className="w-[27%] px-3 py-3">Date</th>
+                    <th className="w-[38%] px-3 py-3">Name</th>
+                    <th className="w-[27%] px-3 py-3 text-right">
                       Total
+                    </th>
+                    <th className="w-[8%] px-2 py-3">
+                      <span className="sr-only">Open booking</span>
                     </th>
                   </tr>
                 </thead>
@@ -230,6 +234,23 @@ export default function CheckInAuditPage() {
                       <td className="px-3 py-3 text-right font-bold">
                         {formatCheckInAuditMoney(row.total)}
                       </td>
+                      <td className="px-2 py-3 text-right">
+                        <Link
+                          aria-label={`Open booking ${row.bookingId}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-link hover:no-underline"
+                          href={{
+                            pathname: `/protected/booking/${row.bookingId}`,
+                            query: {
+                              returnTo:
+                                "/protected/settings/check-in-audit",
+                            },
+                          }}
+                        >
+                          <span className="material-symbols-outlined">
+                            chevron_right
+                          </span>
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -237,11 +258,13 @@ export default function CheckInAuditPage() {
             </div>
 
             <div className="hidden overflow-x-auto rounded-xl border border-[#D0D0D0] laptop-up:block">
-              <table className="w-full min-w-[1180px] text-left text-sm">
+              <table className="w-full min-w-[1420px] text-left text-sm">
                 <thead className="bg-[#F4F4F4]">
                   <tr>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Multiple</th>
                     <th className="px-4 py-3 text-right">
                       Advance amount
                     </th>
@@ -254,6 +277,9 @@ export default function CheckInAuditPage() {
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3 text-right">Tax</th>
                     <th className="px-4 py-3 text-right">Total</th>
+                    <th className="w-12 px-2 py-3">
+                      <span className="sr-only">Open booking</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -267,6 +293,12 @@ export default function CheckInAuditPage() {
                       </td>
                       <td className="px-4 py-3 font-bold">
                         {row.clientName}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {row.bookingType}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {row.multiple ? "true" : "false"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
                         {formatCheckInAuditMoney(row.advanceAmount)}
@@ -291,6 +323,23 @@ export default function CheckInAuditPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-bold">
                         {formatCheckInAuditMoney(row.total)}
+                      </td>
+                      <td className="px-2 py-3 text-right">
+                        <Link
+                          aria-label={`Open booking ${row.bookingId}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-link hover:no-underline"
+                          href={{
+                            pathname: `/protected/booking/${row.bookingId}`,
+                            query: {
+                              returnTo:
+                                "/protected/settings/check-in-audit",
+                            },
+                          }}
+                        >
+                          <span className="material-symbols-outlined">
+                            chevron_right
+                          </span>
+                        </Link>
                       </td>
                     </tr>
                   ))}

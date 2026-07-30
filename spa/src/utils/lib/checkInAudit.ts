@@ -29,6 +29,11 @@ export const CHECK_IN_AUDIT_TABS = [
     label: "Castle",
     properties: [Property.Castle],
   },
+  {
+    id: "unallocated",
+    label: "Unallocated",
+    properties: [],
+  },
 ] as const;
 
 export type CheckInAuditTabId =
@@ -67,6 +72,11 @@ export interface CheckInAuditDatabaseRow {
   properties: string[] | string | null;
   tax: string | number | null;
   total: string | number | null;
+  booking_type: "Event" | "Stay" | null;
+  cost_items: Array<{
+    property: string | null;
+    amount: string | number;
+  }> | null;
   payments: Array<{
     id: string | number;
     amount: string | number;
@@ -79,6 +89,11 @@ export interface CheckInAuditRow {
   checkInDate: string;
   clientName: string;
   properties: Property[];
+  bookingType: "Event" | "Stay";
+  multiple: boolean;
+  propertyCosts: Partial<Record<Property, number>>;
+  unallocatedCost: number;
+  totalCost: number;
   advanceAmount: number;
   advanceReceivedDate: string | null;
   remainingPaymentAmount: number;
@@ -149,6 +164,29 @@ export function buildCheckInAuditRow(
         ? payment.paymentDate.toISOString()
         : payment.paymentDate,
   }));
+  const propertyCosts: Partial<Record<Property, number>> = {};
+  let unallocatedCost = 0;
+
+  for (const item of row.cost_items ?? []) {
+    if (!item.property) {
+      unallocatedCost += Number(item.amount);
+      continue;
+    }
+
+    try {
+      const property = convertStringOnlyToProperty(item.property);
+      propertyCosts[property] =
+        (propertyCosts[property] ?? 0) + Number(item.amount);
+    } catch {
+      unallocatedCost += Number(item.amount);
+    }
+  }
+  const properties = parseDatabaseProperties(row.properties);
+  const totalCost =
+    Object.values(propertyCosts).reduce(
+      (total, amount) => total + (amount ?? 0),
+      0
+    ) + unallocatedCost;
 
   return {
     bookingId: Number(row.booking_id),
@@ -157,7 +195,12 @@ export function buildCheckInAuditRow(
         ? row.check_in.toISOString()
         : row.check_in,
     clientName: row.client_name,
-    properties: parseDatabaseProperties(row.properties),
+    properties,
+    bookingType: row.booking_type === "Event" ? "Event" : "Stay",
+    multiple: properties.length > 1,
+    propertyCosts,
+    unallocatedCost,
+    totalCost,
     ...summarizeCheckInPayments(payments),
     tax: Number(row.tax ?? 0),
     total: Number(row.total ?? 0),
@@ -171,10 +214,41 @@ export function rowsForCheckInAuditTab(
   const tab = CHECK_IN_AUDIT_TABS.find(({ id }) => id === tabId);
   if (!tab) return [];
 
+  if (tab.id === "unallocated") {
+    return rows
+      .filter((row) => row.unallocatedCost > 0)
+      .map((row) => allocateCheckInAuditRow(row, row.unallocatedCost));
+  }
+
   const properties = new Set<Property>(tab.properties);
-  return rows.filter((row) =>
-    row.properties.some((property) => properties.has(property))
-  );
+  return rows
+    .filter((row) =>
+      row.properties.some((property) => properties.has(property))
+    )
+    .map((row) => {
+      const attributedCost = tab.properties.reduce(
+        (total, property) =>
+          total + (row.propertyCosts[property] ?? 0),
+        0
+      );
+      return allocateCheckInAuditRow(row, attributedCost);
+    });
+}
+
+function allocateCheckInAuditRow(
+  row: CheckInAuditRow,
+  attributedCost: number
+): CheckInAuditRow {
+  const fraction =
+    row.totalCost > 0 ? attributedCost / row.totalCost : 0;
+
+  return {
+    ...row,
+    advanceAmount: row.advanceAmount * fraction,
+    remainingPaymentAmount: row.remainingPaymentAmount * fraction,
+    tax: row.tax * fraction,
+    total: row.total * fraction,
+  };
 }
 
 export function getCheckInAuditPeriod(

@@ -438,8 +438,25 @@ export async function fetchCheckInAudit(): Promise<CheckInAuditRow[]> {
           booking.check_in,
           booking.client_name,
           booking.properties,
+          booking.json[array_upper(booking.json, 1)]
+            ->> 'bookingType' AS booking_type,
           totals.tax,
           totals.after_tax_total AS total,
+          coalesce(
+            (
+              SELECT jsonb_agg(
+                jsonb_build_object(
+                  'property', cost.property,
+                  'amount', cost.amount
+                )
+                ORDER BY cost.id
+              )
+              FROM public.booking_cost_items cost
+              WHERE cost.booking_id = booking.id
+                AND cost.item_type = 'cost'
+            ),
+            '[]'::jsonb
+          ) AS cost_items,
           coalesce(
             jsonb_agg(
               jsonb_build_object(
@@ -463,6 +480,7 @@ export async function fetchCheckInAudit(): Promise<CheckInAuditRow[]> {
           booking.check_in,
           booking.client_name,
           booking.properties,
+          booking_type,
           totals.tax,
           totals.after_tax_total
         ORDER BY booking.check_in ASC, booking.id ASC`
