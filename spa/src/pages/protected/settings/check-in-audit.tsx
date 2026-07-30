@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  availableCheckInAuditYears,
+  CHECK_IN_AUDIT_MONTHS,
   CHECK_IN_AUDIT_TABS,
   CheckInAuditRow,
   CheckInAuditTabId,
   formatCheckInAuditDate,
   formatCheckInAuditMoney,
+  getCurrentCheckInAuditPeriod,
+  rowsForCheckInAuditPeriod,
   rowsForCheckInAuditTab,
 } from "@/utils/lib/checkInAudit";
 import { supabase } from "@/utils/supabase/client";
@@ -17,9 +21,17 @@ interface CheckInAuditResponse {
 
 export default function CheckInAuditPage() {
   const router = useRouter();
+  const currentPeriod = useMemo(
+    () => getCurrentCheckInAuditPeriod(),
+    []
+  );
   const [audit, setAudit] = useState<CheckInAuditResponse | null>(null);
   const [activeTab, setActiveTab] =
     useState<CheckInAuditTabId>("blue-glass");
+  const [selectedMonth, setSelectedMonth] = useState(
+    currentPeriod.month
+  );
+  const [selectedYear, setSelectedYear] = useState(currentPeriod.year);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -61,11 +73,23 @@ export default function CheckInAuditPage() {
     loadAudit();
   }, [loadAudit]);
 
-  const rows = useMemo(
+  const availableYears = useMemo(
     () =>
-      audit ? rowsForCheckInAuditTab(audit.rows, activeTab) : [],
-    [activeTab, audit]
+      availableCheckInAuditYears(
+        audit?.rows ?? [],
+        currentPeriod.year
+      ),
+    [audit, currentPeriod.year]
   );
+
+  const rows = useMemo(() => {
+    if (!audit) return [];
+    const periodRows = rowsForCheckInAuditPeriod(audit.rows, {
+      month: selectedMonth,
+      year: selectedYear,
+    });
+    return rowsForCheckInAuditTab(periodRows, activeTab);
+  }, [activeTab, audit, selectedMonth, selectedYear]);
 
   return (
     <div className="flex w-full flex-col gap-5 pb-8 laptop-up:px-10">
@@ -96,6 +120,41 @@ export default function CheckInAuditPage() {
             refresh
           </span>
         </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 laptop-up:flex laptop-up:w-fit">
+        <label className="flex flex-col gap-1 text-xs font-bold text-typo_light-200">
+          Month
+          <select
+            className="h-11 rounded-lg border border-[#BEBEBE] bg-white px-3 text-sm text-typo_dark-300 laptop-up:min-w-44"
+            onChange={(event) =>
+              setSelectedMonth(Number(event.target.value))
+            }
+            value={selectedMonth}
+          >
+            {CHECK_IN_AUDIT_MONTHS.map((month, index) => (
+              <option key={month} value={index + 1}>
+                {month}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-bold text-typo_light-200">
+          Year
+          <select
+            className="h-11 rounded-lg border border-[#BEBEBE] bg-white px-3 text-sm text-typo_dark-300 laptop-up:min-w-32"
+            onChange={(event) =>
+              setSelectedYear(Number(event.target.value))
+            }
+            value={selectedYear}
+          >
+            {availableYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -139,7 +198,8 @@ export default function CheckInAuditPage() {
           <div className="rounded-xl border border-[#BEBEBE] p-6 text-center">
             <p className="font-bold">No confirmed check-ins</p>
             <p className="mt-1 text-sm text-typo_light-200">
-              This property has no confirmed booking records.
+              This property has no confirmed check-ins in{" "}
+              {CHECK_IN_AUDIT_MONTHS[selectedMonth - 1]} {selectedYear}.
             </p>
           </div>
         ) : (

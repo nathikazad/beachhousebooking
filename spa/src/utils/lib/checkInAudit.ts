@@ -34,6 +34,26 @@ export const CHECK_IN_AUDIT_TABS = [
 export type CheckInAuditTabId =
   (typeof CHECK_IN_AUDIT_TABS)[number]["id"];
 
+export const CHECK_IN_AUDIT_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+export interface CheckInAuditPeriod {
+  month: number;
+  year: number;
+}
+
 export interface CheckInAuditPayment {
   id: number;
   amount: number;
@@ -155,6 +175,54 @@ export function rowsForCheckInAuditTab(
   return rows.filter((row) =>
     row.properties.some((property) => properties.has(property))
   );
+}
+
+export function getCheckInAuditPeriod(
+  value: string | Date
+): CheckInAuditPeriod {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).formatToParts(new Date(value));
+  const month = Number(
+    parts.find(({ type }) => type === "month")?.value
+  );
+  const year = Number(
+    parts.find(({ type }) => type === "year")?.value
+  );
+
+  return { month, year };
+}
+
+export function getCurrentCheckInAuditPeriod(
+  now = new Date()
+): CheckInAuditPeriod {
+  return getCheckInAuditPeriod(now);
+}
+
+export function rowsForCheckInAuditPeriod(
+  rows: CheckInAuditRow[],
+  period: CheckInAuditPeriod
+): CheckInAuditRow[] {
+  return rows.filter((row) => {
+    const rowPeriod = getCheckInAuditPeriod(row.checkInDate);
+    return (
+      rowPeriod.month === period.month && rowPeriod.year === period.year
+    );
+  });
+}
+
+export function availableCheckInAuditYears(
+  rows: CheckInAuditRow[],
+  currentYear: number
+): number[] {
+  return Array.from(
+    new Set([
+      currentYear,
+      ...rows.map((row) => getCheckInAuditPeriod(row.checkInDate).year),
+    ])
+  ).sort((first, second) => second - first);
 }
 
 export function formatCheckInAuditDate(value: string | null): string {

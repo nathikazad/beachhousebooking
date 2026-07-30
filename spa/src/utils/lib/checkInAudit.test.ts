@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Property } from "./bookingType";
 import {
+  availableCheckInAuditYears,
   buildCheckInAuditRow,
+  getCurrentCheckInAuditPeriod,
   rowsForCheckInAuditTab,
+  rowsForCheckInAuditPeriod,
   summarizeCheckInPayments,
 } from "./checkInAudit";
 
@@ -112,5 +115,81 @@ describe("check-in audit rows", () => {
     expect(rowsForCheckInAuditTab(rows, "blue-glass")).toHaveLength(1);
     expect(rowsForCheckInAuditTab(rows, "castle")).toHaveLength(1);
     expect(rowsForCheckInAuditTab(rows, "meadow-lane")).toHaveLength(0);
+  });
+
+  it("filters check-ins by month and year in India time", () => {
+    const rows = [
+      {
+        bookingId: 1,
+        checkInDate: "2026-07-31T20:00:00.000Z",
+        clientName: "August in India",
+        properties: [Property.Castle],
+        advanceAmount: 0,
+        advanceReceivedDate: null,
+        remainingPaymentAmount: 0,
+        remainingPaymentReceivedDate: null,
+        tax: 0,
+        total: 1000,
+      },
+      {
+        bookingId: 2,
+        checkInDate: "2026-07-31T10:00:00.000Z",
+        clientName: "July in India",
+        properties: [Property.Castle],
+        advanceAmount: 0,
+        advanceReceivedDate: null,
+        remainingPaymentAmount: 0,
+        remainingPaymentReceivedDate: null,
+        tax: 0,
+        total: 1000,
+      },
+    ];
+
+    expect(
+      rowsForCheckInAuditPeriod(rows, { month: 8, year: 2026 }).map(
+        (row) => row.bookingId
+      )
+    ).toEqual([1]);
+  });
+
+  it("defaults to the current month and year in India time", () => {
+    expect(
+      getCurrentCheckInAuditPeriod(
+        new Date("2026-12-31T20:00:00.000Z")
+      )
+    ).toEqual({ month: 1, year: 2027 });
+  });
+
+  it("builds descending year options from the available bookings", () => {
+    const rows = [
+      {
+        bookingId: 1,
+        checkInDate: "2024-01-01T10:00:00.000Z",
+        clientName: "Older",
+        properties: [Property.Castle],
+        advanceAmount: 0,
+        advanceReceivedDate: null,
+        remainingPaymentAmount: 0,
+        remainingPaymentReceivedDate: null,
+        tax: 0,
+        total: 1000,
+      },
+      {
+        bookingId: 2,
+        checkInDate: "2027-01-01T10:00:00.000Z",
+        clientName: "Future",
+        properties: [Property.Castle],
+        advanceAmount: 0,
+        advanceReceivedDate: null,
+        remainingPaymentAmount: 0,
+        remainingPaymentReceivedDate: null,
+        tax: 0,
+        total: 1000,
+      },
+    ];
+
+    expect(availableCheckInAuditYears(rows, 2026)).toEqual([
+      2027, 2026, 2024,
+    ]);
   });
 });
