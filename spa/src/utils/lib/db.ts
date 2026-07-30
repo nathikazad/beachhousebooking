@@ -1,4 +1,11 @@
-import { BookingDB, BookingForm, getProperties, convertPropertiesForDb } from "./bookingType";
+import {
+    BookingDB,
+    BookingForm,
+    Employee,
+    Payment,
+    getProperties,
+    convertPropertiesForDb,
+} from "./bookingType";
 import { query, QueryExecutor, withTransaction } from "./helper";
 import {
     BookingConflict,
@@ -7,6 +14,17 @@ import {
     normalizeBookingToOccupancies,
 } from "./occupancy";
 import { AuditedBookingConflict } from "./conflictAudit";
+import {
+    BookingFinancialRecords,
+    calculateFinancialTotals,
+    extractBookingFinancials,
+    hydrateBookingFinancials,
+    propertyFromDatabaseValue,
+    stripFinancialData,
+    shouldUseLegacyFinancials,
+    validateBookingFinancials,
+} from "./financials";
+import { replaceFinancialRecords } from "./financialPersistence";
 
 function toISOString(value: string | Date): string {
     return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -68,6 +86,128 @@ async function replaceBookingOccupancies(
                 }))
             ),
         ]
+    );
+}
+
+async function replaceBookingFinancials(
+    executor: QueryExecutor,
+    bookingId: number,
+    booking: BookingDB
+) {
+    await replaceFinancialRecords(
+        executor,
+        bookingId,
+        extractBookingFinancials(booking)
+    );
+}
+
+async function fetchBookingFinancials(
+    bookingId: number
+): Promise<BookingFinancialRecords> {
+    const [costItems, payments, deposits] = await Promise.all([
+        query(
+            `
+            SELECT id, property, event_id, item_type, name, amount
+            FROM public.booking_cost_items
+            WHERE booking_id = $1
+            ORDER BY id`,
+            [bookingId]
+        ),
+        query(
+            `
+            SELECT id, amount, payment_method, payment_date, received_by, details
+            FROM public.booking_payments
+            WHERE booking_id = $1
+            ORDER BY payment_date, id`,
+            [bookingId]
+        ),
+        query(
+            `
+            SELECT amount, payment_method, amount_returned, date_returned
+            FROM public.booking_security_deposits
+            WHERE booking_id = $1`,
+            [bookingId]
+        ),
+    ]);
+
+    const deposit = deposits[0];
+    return {
+        costItems: costItems.map((item: {
+            id: string | number;
+            property: string | null;
+            event_id: string | number | null;
+            item_type: "cost" | "tax";
+            name: string;
+            amount: string | number;
+        }) => ({
+            id: Number(item.id),
+            bookingId,
+            property: propertyFromDatabaseValue(item.property),
+            eventId:
+                item.event_id === null ? undefined : Number(item.event_id),
+            itemType: item.item_type,
+            name: item.name,
+            amount: Number(item.amount),
+        })),
+        payments: payments.map((payment: {
+            id: string | number;
+            amount: string | number;
+            payment_method: Payment["paymentMethod"];
+            payment_date: string | Date;
+            received_by: Employee | null;
+            details: Record<string, string>;
+        }) => ({
+            id: Number(payment.id),
+            bookingId,
+            amount: Number(payment.amount),
+            paymentMethod: payment.payment_method,
+            paymentDate: toISOString(payment.payment_date),
+            receivedBy: payment.received_by ?? undefined,
+            details: payment.details ?? {},
+        })),
+        securityDeposit: deposit
+            ? {
+                bookingId,
+                amount: Number(deposit.amount),
+                paymentMethod: deposit.payment_method,
+                amountReturned: Number(deposit.amount_returned),
+                dateReturned: deposit.date_returned
+                    ? toISOString(deposit.date_returned)
+                    : undefined,
+            }
+            : null,
+    };
+}
+
+async function hydrateLatestBooking(
+    bookingId: number,
+    history: BookingDB[]
+): Promise<BookingDB[]> {
+    if (history.length === 0) return history;
+
+    const financials = await fetchBookingFinancials(bookingId);
+    const currentIndex = history.length - 1;
+    const latest = history[currentIndex];
+    if (shouldUseLegacyFinancials(latest, financials)) {
+        return history;
+    }
+
+    return history.map((booking, index) =>
+        index === currentIndex
+            ? hydrateBookingFinancials(
+                { ...booking, bookingId },
+                financials
+            )
+            : booking.encodingVersion >= 2
+                ? hydrateBookingFinancials(
+                    { ...booking, bookingId },
+                    {
+                        costItems: [],
+                        payments: [],
+                        securityDeposit: null,
+                    }
+                )
+                : booking
     );
 }
 
@@ -170,6 +310,9 @@ export async function fetchUpcomingBookingConflicts(): Promise<
 }
 
 export async function createBooking(booking: BookingDB, name: string): Promise<number> {
+    validateBookingFinancials(booking);
+    const totals = calculateFinancialTotals(extractBookingFinancials(booking));
+
     return withTransaction(async (client) => {
         const { rows } = await client.query(`
             INSERT INTO bookings(email, json, client_name, client_phone_number, referred_by, status, properties, check_in, check_out, created_at, updated_at, starred, total_cost, paid, outstanding, tax, after_tax_total, client_view_id)
@@ -177,7 +320,7 @@ export async function createBooking(booking: BookingDB, name: string): Promise<n
             RETURNING id`,
             [
                 name,
-                [booking],
+                [stripFinancialData(booking)],
                 booking.client.name,
                 booking.client.phone,
                 booking.refferral,
@@ -188,21 +331,31 @@ export async function createBooking(booking: BookingDB, name: string): Promise<n
                 booking.createdDateTime,
                 booking.updatedDateTime,
                 booking.starred ?? false,
-                booking.totalCost ?? 0,
-                booking.paid ?? 0,
-                booking.outstanding ?? 0,
-                booking.tax ?? 0,
-                booking.afterTaxTotal ?? 0,
+                totals.totalCost,
+                totals.paid,
+                totals.outstanding,
+                totals.tax,
+                totals.afterTaxTotal,
                 booking.clientViewId!
             ]);
         const bookingId = Number(rows[0].id);
         await replaceBookingOccupancies(client, bookingId, booking);
+        await replaceBookingFinancials(client, bookingId, booking);
         return bookingId;
     });
 }
 
 export async function updateBooking(booking: BookingDB[], id: number) {
     const lastBooking = booking[booking.length - 1];
+    validateBookingFinancials(lastBooking, true);
+    const totals = calculateFinancialTotals(
+        extractBookingFinancials(lastBooking)
+    );
+    const persistedHistory = booking.map((snapshot) =>
+        snapshot.encodingVersion >= 2
+            ? stripFinancialData(snapshot)
+            : snapshot
+    );
 
     await withTransaction(async (client) => {
         await client.query(`
@@ -227,7 +380,7 @@ export async function updateBooking(booking: BookingDB[], id: number) {
               created_at = $18
             WHERE id = $1`,
             [id,
-                booking,
+                persistedHistory,
                 lastBooking.client.name,
                 lastBooking.client.phone,
                 lastBooking.refferral,
@@ -237,19 +390,37 @@ export async function updateBooking(booking: BookingDB[], id: number) {
                 lastBooking.startDateTime,
                 lastBooking.endDateTime,
                 lastBooking.starred ?? false,
-                lastBooking.totalCost ?? 0,
-                lastBooking.paid ?? 0,
-                lastBooking.outstanding ?? 0,
-                lastBooking.tax ?? 0,
-                lastBooking.afterTaxTotal ?? 0,
+                totals.totalCost,
+                totals.paid,
+                totals.outstanding,
+                totals.tax,
+                totals.afterTaxTotal,
                 lastBooking.clientViewId,
                 lastBooking.createdDateTime
             ]);
         await replaceBookingOccupancies(client, id, lastBooking);
+        await replaceBookingFinancials(client, id, lastBooking);
     });
 }
 
 export async function fetchBooking(id: number): Promise<BookingDB[]> {
     const result = await query('SELECT * FROM bookings WHERE id = $1', [id]);
-    return result[0].json;
+    if (result.length === 0) {
+        throw new Error("Booking not found");
+    }
+    return hydrateLatestBooking(id, result[0].json ?? []);
+}
+
+export async function fetchBookingByClientViewId(
+    clientViewId: string
+): Promise<BookingDB[]> {
+    const result = await query(
+        "SELECT id, json FROM bookings WHERE client_view_id = $1",
+        [clientViewId]
+    );
+    if (result.length === 0) {
+        throw new Error("Booking not found");
+    }
+
+    return hydrateLatestBooking(Number(result[0].id), result[0].json ?? []);
 }

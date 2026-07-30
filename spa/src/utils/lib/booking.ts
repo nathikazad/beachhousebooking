@@ -10,6 +10,7 @@ import {
   BookingConflictError,
   formatBookingConflictMessage,
 } from "./occupancy";
+import { validateBookingFinancials } from "./financials";
 
 function capitalizeString(str: string): string {
   return str.replace(/\b\w/g, l => l.toUpperCase());
@@ -41,7 +42,7 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
       ...booking.client,
       name: capitalizeString(booking.client.name)
     },
-    encodingVersion: 1,
+    encodingVersion: 2,
     createdDateTime: (booking as BookingDB).createdDateTime ? convertIndianTimeToUTC((booking as BookingDB).createdDateTime) : new Date().toISOString(),
     createdBy: {
       id: user.id,
@@ -76,6 +77,8 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
   if (newBooking.clientViewId === undefined) {
     newBooking.clientViewId = Math.floor(Math.random() * 1000000).toString();
   }
+  validateBookingFinancials(newBooking, Boolean(newBooking.bookingId));
+
   if (newBooking.status == "Confirmed" || newBooking.status == "Preconfirmed") {
     const { doubleBooking, conflicts } = await checkForDoubleBooking(newBooking);
     if (doubleBooking) {

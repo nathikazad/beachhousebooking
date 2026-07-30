@@ -125,6 +125,21 @@ describe("mutateBookingState conflict validation", () => {
     expect(mocks.addToCalendar).toHaveBeenCalledOnce();
     expect(mocks.createBooking).toHaveBeenCalledOnce();
   });
+
+  it("stops before Calendar when a new financial item has no property", async () => {
+    const booking = confirmedStay();
+    booking.costs = [{ name: "Rent", amount: 1000 }];
+
+    await expect(
+      mutateBookingState(booking, {
+        id: "user-1",
+        displayName: "Tester",
+      })
+    ).rejects.toThrow("Select a property");
+
+    expect(mocks.addToCalendar).not.toHaveBeenCalled();
+    expect(mocks.createBooking).not.toHaveBeenCalled();
+  });
 });
 
 describe("deleteBooking", () => {

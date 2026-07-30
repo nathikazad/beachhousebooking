@@ -23,6 +23,7 @@ import { supabase } from "@/utils/supabase/client";
 import SearchInput from "./ui/SearchInput";
 import BookingFilter, { Filter } from "./BookingFilter";
 import LoadingButton from "./ui/LoadingButton";
+import { bookingSummaryFromRow } from "@/utils/lib/financials";
 import { useSearchParams } from "next/navigation";
 
 // interface BookingProps {
@@ -150,20 +151,10 @@ export default function ListBooking({ className }: ListBookingProps) {
 
       let bookings: BookingDB[] = [];
       for (const booking of backwardResults.data ?? []) {
-        const lastIndex = booking.json.length - 1;
-        const lastBooking = booking.json[lastIndex];
-        bookings.unshift({
-          ...lastBooking,
-          bookingId: booking.id,
-        });
+        bookings.unshift(bookingSummaryFromRow(booking));
       }
       for (const booking of forwardResults.data ?? []) {
-        const lastIndex = booking.json.length - 1;
-        const lastBooking = booking.json[lastIndex];
-        bookings.push({
-          ...lastBooking,
-          bookingId: booking.id,
-        });
+        bookings.push(bookingSummaryFromRow(booking));
       }
 
       setState((prevState) => ({

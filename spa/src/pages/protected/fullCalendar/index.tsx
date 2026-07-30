@@ -5,6 +5,7 @@ import { BookingDB, CalendarCell, convertPropertiesForDb, convertStringToPropert
 import { supabase } from "@/utils/supabase/client";
 import format from "date-fns/format";
 import { useEffect, useRef, useState } from "react";
+import { bookingSummaryFromRow } from "@/utils/lib/financials";
 interface ListBookingsState {
     date: Date | null;
     dbBookings: BookingDB[];
@@ -39,13 +40,7 @@ const FullCalendar = () => {
         if (bookingsData.data) {
             let bookings: BookingDB[] = [];
             for (const booking of bookingsData.data ?? []) {
-                const lastIndex = booking.json.length - 1;
-                const lastBooking = booking.json[lastIndex];
-
-                bookings.unshift({
-                    ...lastBooking,
-                    bookingId: booking.id,
-                });
+                bookings.unshift(bookingSummaryFromRow(booking));
             }
             setState((prevState) => ({
                 ...prevState,
@@ -86,4 +81,4 @@ const FullCalendar = () => {
         </div>
     );
 }
-export default FullCalendar 
+export default FullCalendar

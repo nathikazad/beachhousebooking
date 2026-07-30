@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:backfill-occupancies": "tsx scripts/backfill-booking-occupancies.ts",
+    "db:backfill-financials": "tsx scripts/backfill-booking-financials.ts",
     "db:audit-conflicts": "tsx scripts/audit-booking-conflicts.ts",
     "db:audit-pre-migration": "tsx scripts/audit-existing-bookings.ts"
   },

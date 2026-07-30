@@ -2,7 +2,11 @@ import { BookingForm } from '@/utils/lib/bookingType';
 import { deleteBooking, mutateBookingState } from '@/utils/lib/booking';
 import { BookingConflictError } from '@/utils/lib/occupancy';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { fetchUser, saveUser, verifyAndGetPayload } from '@/utils/lib/auth';
+import { fetchUser, verifyAndGetPayload } from '@/utils/lib/auth';
+import {
+  fetchBooking,
+  fetchBookingByClientViewId,
+} from "@/utils/lib/db";
 
 export const config = {
   maxDuration: 59,
@@ -10,6 +14,8 @@ export const config = {
 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+
   switch (req.method) {
   case 'GET':
     await handleGet(req, res);
@@ -27,9 +33,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
-  console.log('Get request');
-  // saveUser()
-  res.status(200).json({ message: "Hello" });
+  try {
+    const { bookingId, clientViewId } = req.query;
+
+    if (typeof clientViewId === "string") {
+      const history = await fetchBookingByClientViewId(clientViewId);
+      const publicHistory = history.map((booking) => ({
+        ...booking,
+        payments: (booking.payments ?? []).map((payment) => {
+          const { details: _details, ...publicPayment } = payment;
+          return publicPayment;
+        }),
+      }));
+      return res.status(200).json({ history: publicHistory });
+    }
+
+    await verifyAndGetPayload(req);
+    if (typeof bookingId !== "string" || !Number.isInteger(Number(bookingId))) {
+      return res.status(400).json({
+        error: "INVALID_BOOKING_ID",
+        message: "A valid booking ID is required.",
+      });
+    }
+
+    const history = await fetchBooking(Number(bookingId));
+    return res.status(200).json({ history });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load booking.";
+    const status = message === "Booking not found" ? 404 : 401;
+    return res.status(status).json({
+      error: status === 404 ? "BOOKING_NOT_FOUND" : "UNAUTHORIZED",
+      message,
+    });
+  }
 };
 
 const handlePost = async (req: NextApiRequest, res: NextApiResponse) => {

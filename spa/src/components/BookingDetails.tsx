@@ -15,9 +15,9 @@ import { usePathname, useSearchParams } from "next/navigation";
 import EventDetailsComponent from "./EventDetails";
 import CreateEventComponent from "./CreateEventForm";
 
-import { supabase } from "@/utils/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { getBookingHistory } from "@/utils/serverCommunicator";
 
 enum Page {
   BookingPage,
@@ -60,20 +60,16 @@ export default function BookingDetailsComponent({
   const pathname = usePathname();
   useEffect(() => {
     if (bookingId) {
-      supabase
-        .from("bookings")
-        .select()
-        .eq("id", bookingId)
-        .then(({ data: bookingsData }) => {
-          if (!bookingsData) return;
-          const currentIndex = bookingsData[0].json.length - 1;
-          const newData = bookingsData[0].json[currentIndex];
+      getBookingHistory({ bookingId }).then((history) => {
+          const currentIndex = history.length - 1;
+          const newData = history[currentIndex];
+          if (!newData) return;
 
           setFormState((prevState) => ({
             ...prevState,
             form: newData,
             bookingDB: newData,
-            allData: bookingsData[0].json,
+            allData: history,
             currentIndex: currentIndex,
           }));
           setIsSwitchOn(newData.bookingType === "Stay" ? false : true);
@@ -476,13 +472,15 @@ export default function BookingDetailsComponent({
                       </p>
                       <div className="cost-list flex flex-col gap-2">
                         {formState.form.costs &&
-                          formState.form.costs.map((cost, index) => (
+                          formState.form.costs
+                            .filter((cost) => cost.itemType !== "tax")
+                            .map((cost, index) => (
                             <div
                               className="flex items-center pl-4 justify-between"
                               key={`cost-${index}`}
                             >
                               <label className="label_text !font-medium">
-                                {cost.name}:{" "}
+                                {cost.name} ({cost.property ?? "Unassigned"}):{" "}
                               </label>
                               <label className="label_text">
                                 ₹{cost.amount.toLocaleString("en-IN")}
@@ -511,7 +509,13 @@ export default function BookingDetailsComponent({
                   {!!formState.form.tax && (
                     <div className="flex flex-col gap-2 ">
                       <label className="title w-full text-right !font-bold flex items-center justify-start">
-                        <strong className=" w-1/2">Tax 18% :</strong>{" "}
+                        <strong className=" w-1/2">
+                          Tax 18% (
+                          {formState.form.costs.find(
+                            (cost) => cost.itemType === "tax"
+                          )?.property ?? "Unassigned"}
+                          ) :
+                        </strong>{" "}
                         <span className="flex-1">
                           {formState.form.tax
                             ? `₹ ${formState.form.tax.toLocaleString("en-IN")}`

@@ -23,6 +23,7 @@ import format from "date-fns/format";
 import SearchInput from "../ui/SearchInput";
 import LoadingButton from "../ui/LoadingButton";
 import DateTimePickerInput from "../DateTimePickerInput/DateTimePickerInput";
+import { bookingSummaryFromRow } from "@/utils/lib/financials";
 import Properties from "../Properties";
 import BookingFilterDesktop, { Filter } from "./BookingFilter.desktop";
 import { supabase } from "@/utils/supabase/client";
@@ -165,12 +166,7 @@ export default function ListLogs({ className }: ListLogsProps) {
 
     let bookings: BookingDB[] = [];
     result?.forEach((booking: any) => {
-      const lastIndex = booking.json.length - 1;
-      const lastBooking: BookingDB = booking.json[lastIndex];
-      bookings.unshift({
-        ...lastBooking,
-        bookingId: booking.id,
-      });
+      bookings.unshift(bookingSummaryFromRow(booking));
     });
     setState((prevState) => ({
       ...prevState,

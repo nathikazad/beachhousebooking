@@ -353,6 +353,8 @@ export interface Cost {
   costId?: number | undefined;
   name: string;
   amount: number;
+  property?: Property | undefined;
+  itemType?: "cost" | "tax";
 }
 
 export interface Payment {
@@ -361,6 +363,7 @@ export interface Payment {
   paymentMethod: "Cash" | "Card" | "GPay" | "Bank transfert";
   amount: number;
   receivedBy?: Employee | undefined;
+  details?: Record<string, string>;
 }
 
 export interface Event {

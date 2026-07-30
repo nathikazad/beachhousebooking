@@ -9,6 +9,7 @@ import ToggleButton from "./ui/ToggleButton";
 import * as yup from "yup";
 import moment from "moment-timezone";
 import BaseModalComponent from "./ui/BaseModal";
+import FinancialItemFields from "./FinancialItemFields";
 
 const properties = Object.values(Property);
 
@@ -91,13 +92,13 @@ const CreateEventComponent: React.FC<CreateEventFormProps> = ({
 
   const handleCostsChange = (
     index: number,
-    e: ChangeEvent<HTMLInputElement>
+    name: "name" | "amount" | "property",
+    value: string
   ) => {
-    const { name, value } = e.target;
     const updatedCosts = [...event.costs];
     updatedCosts[index] = {
       ...updatedCosts[index],
-      [name]: name === "amount" ? parseFloat(value) : value,
+      [name]: name === "amount" ? (value ? parseFloat(value) : 0) : value || undefined,
     };
     setEvent((prevEvent) => ({
       ...prevEvent,
@@ -109,7 +110,13 @@ const CreateEventComponent: React.FC<CreateEventFormProps> = ({
 
   const addCost = (name?: string) => {
     let newCosts = event.costs;
-    newCosts.push({ name: name || "", amount: 0 });
+    newCosts.push({
+      name: name || "",
+      amount: 0,
+      itemType: "cost",
+      property:
+        event.properties.length === 1 ? event.properties[0] : undefined,
+    });
     setEvent((prevEvent) => ({
       ...prevEvent,
       costs: newCosts,
@@ -389,32 +396,15 @@ const CreateEventComponent: React.FC<CreateEventFormProps> = ({
         <p className="text-base font-bold leading-normal my-4">Costs</p>
         <div className="cost-list flex flex-col gap-4">
           {event.costs.map((cost, index) => (
-            <div className="flex items-center gap-4 " key={`cost-${index}`}>
-              <BaseInput
-                type="text"
-                name="name"
-                value={cost.name}
-                onChange={(e) => handleCostsChange(index, e)}
-                placeholder="Type of Expense"
-                className="flex-1"
-              />
-              <BaseInput
-                type="number"
-                name="amount"
-                value={cost.amount}
-                onChange={(e) => handleCostsChange(index, e)}
-                placeholder="Cost"
-                className="flex-1 pr-3"
-              />
-              <span
-                className=" material-symbols-outlined cursor-pointer hover:text-red-500"
-                onClick={() => {
-                  removeEventCost(index);
-                }}
-              >
-                delete
-              </span>
-            </div>
+            <FinancialItemFields
+              key={`cost-${index}`}
+              cost={cost}
+              properties={event.properties}
+              onChange={(name, value) =>
+                handleCostsChange(index, name, value)
+              }
+              onDelete={() => removeEventCost(index)}
+            />
           ))}
         </div>
         <div className="flex items-center justify-end relative">

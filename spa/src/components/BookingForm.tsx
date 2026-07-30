@@ -9,6 +9,7 @@ import {
   BookingDB,
   printInIndianTime,
   Property,
+  getProperties,
 } from "@/utils/lib/bookingType";
 import React, {
   useState,
@@ -25,10 +26,16 @@ import DateTimePickerInput from "./DateTimePickerInput/DateTimePickerInput";
 import Properties from "./Properties";
 import BaseInput from "./ui/BaseInput";
 import LoadingButton from "./ui/LoadingButton";
-import { supabase } from "@/utils/supabase/client";
-import { createBooking, deleteBooking } from "@/utils/serverCommunicator";
+import {
+  createBooking,
+  deleteBooking,
+  getBookingHistory,
+} from "@/utils/serverCommunicator";
 import ToggleButton from "./ui/ToggleButton";
 import BaseModalComponent from "./ui/BaseModal";
+import FinancialItemFields, {
+  FinancialPropertySelect,
+} from "./FinancialItemFields";
 
 
 enum Page {
@@ -68,19 +75,16 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
   const formRef = useRef<any>(null)
   useEffect(() => {
     if (bookingId) {
-      supabase
-        .from("bookings")
-        .select()
-        .eq("id", bookingId)
-        .then(({ data: bookingsData }) => {
-          if (!bookingsData) return;
-          const currentIndex = bookingsData[0].json.length - 1;
-          const newData = bookingsData[0].json[currentIndex];
+      getBookingHistory({ bookingId })
+        .then((history) => {
+          const currentIndex = history.length - 1;
+          const newData = history[currentIndex];
+          if (!newData) return;
           setFormState((prevState) => ({
             ...prevState,
             form: newData,
             bookingDB: newData,
-            allData: bookingsData[0].json,
+            allData: history,
             currentIndex: currentIndex,
           }));
           setIsSwitchOn(newData.bookingType === "Stay" ? false : true);
@@ -91,7 +95,8 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
           setShowReturnDeposit(!!newData?.securityDeposit?.amountReturned);
 
 
-        });
+        })
+        .catch((error) => setErrorModal(error.message));
     }
   }, [bookingId]);
 
@@ -270,28 +275,39 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
   const [openedDropDown, setOpenedDropDown] = useState<Boolean>(false);
   const handleCostsChange = (
     index: number,
-    e: ChangeEvent<HTMLInputElement>
+    name: "name" | "amount" | "property",
+    value: string
   ) => {
-    const { name, value } = e.target;
     const updatedCosts = [...formState.form.costs];
     updatedCosts[index] = {
       ...updatedCosts[index],
-      [name]: name === "amount" ? parseFloat(value) : value,
+      [name]: name === "amount" ? (value ? parseFloat(value) : 0) : value || undefined,
     };
+    const totalCost = updatedCosts
+      .filter((cost) => cost.itemType !== "tax")
+      .reduce((total, cost) => total + cost.amount, 0);
     setFormState((prevState) => ({
       ...prevState,
       form: {
         ...prevState.form,
         costs: updatedCosts,
-        totalCost: updatedCosts.reduce((acc, cost) => acc + cost.amount, 0),
+        totalCost,
       },
     }));
     setEdited(true)
   };
 
   const addCost = (name?: string) => {
-    let newCosts = formState.form.costs;
-    newCosts.push({ name: name || "", amount: 0 });
+    const properties = getProperties(formState.form);
+    const newCosts = [
+      ...formState.form.costs,
+      {
+        name: name || "",
+        amount: 0,
+        itemType: "cost" as const,
+        property: properties.length === 1 ? properties[0] : undefined,
+      },
+    ];
     setFormState((prevState) => ({
       ...prevState,
       form: {
@@ -305,12 +321,15 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
 
   const removeEventCost = (costIndex: number) => {
     const updatedCosts = formState.form.costs.filter((_, i) => i !== costIndex);
+    const totalCost = updatedCosts
+      .filter((cost) => cost.itemType !== "tax")
+      .reduce((total, cost) => total + cost.amount, 0);
     setFormState((prevState) => ({
       ...prevState,
       form: {
         ...prevState.form,
         costs: updatedCosts,
-        totalCost: updatedCosts.reduce((acc, cost) => acc + cost.amount, 0),
+        totalCost,
       },
     }));
     setEdited(true)
@@ -328,9 +347,12 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
       ...prevState,
       form: {
         ...prevState.form,
-        tax: tax,
-        afterTaxTotal: afterTaxTotal,
-        outstanding: afterTaxTotal - formState.form.paid,
+        costs: prevState.form.costs.map((cost) =>
+          cost.itemType === "tax" ? { ...cost, amount: tax } : cost
+        ),
+        tax,
+        afterTaxTotal,
+        outstanding: afterTaxTotal - prevState.form.paid,
       },
     }));
 
@@ -347,6 +369,30 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
       ...prevState,
       form: {
         ...prevState.form,
+        costs: checked
+          ? [
+              ...prevState.form.costs.filter(
+                (cost) => cost.itemType !== "tax"
+              ),
+              {
+                ...(prevState.form.costs.find(
+                  (cost) => cost.itemType === "tax"
+                ) ?? {}),
+                name: "GST 18%",
+                amount: tax,
+                itemType: "tax",
+                property:
+                  prevState.form.costs.find(
+                    (cost) => cost.itemType === "tax"
+                  )?.property ??
+                  (getProperties(prevState.form).length === 1
+                    ? getProperties(prevState.form)[0]
+                    : undefined),
+              },
+            ]
+          : prevState.form.costs.filter(
+              (cost) => cost.itemType !== "tax"
+            ),
         tax: tax,
         afterTaxTotal: afterTaxTotal,
         outstanding: afterTaxTotal - prevState.form.paid,
@@ -356,12 +402,33 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
     setEdited(true)
   };
 
+  const taxItem = formState.form.costs.find(
+    (cost) => cost.itemType === "tax"
+  );
+  const setTaxProperty = (property: Property | undefined) => {
+    setFormState((prevState) => ({
+      ...prevState,
+      form: {
+        ...prevState.form,
+        costs: prevState.form.costs.map((cost) =>
+          cost.itemType === "tax" ? { ...cost, property } : cost
+        ),
+      },
+    }));
+    setEdited(true);
+  };
+
   //**********************End tax settings **********************
 
   //********************** Payment Params and methods **********************
   const addPayment = () => {
     let newPayments = formState.form.payments;
-    newPayments.push({ paymentMethod: "Cash", amount: 0, dateTime: "" });
+    newPayments.push({
+      paymentMethod: "Cash",
+      amount: 0,
+      dateTime: "",
+      details: {},
+    });
     setFormState((prevState) => ({
       ...prevState,
       form: {
@@ -392,10 +459,19 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
   };
   const handlePaymentChange = (name: string, value: string, index: number) => {
     const updatedPayments = [...formState.form.payments];
-    updatedPayments[index] = {
-      ...updatedPayments[index],
-      [name]: name === "amount" ? (value ? parseFloat(value) : 0) : value,
-    };
+    updatedPayments[index] =
+      name === "details"
+        ? {
+            ...updatedPayments[index],
+            details: {
+              ...updatedPayments[index].details,
+              notes: value,
+            },
+          }
+        : {
+            ...updatedPayments[index],
+            [name]: name === "amount" ? (value ? parseFloat(value) : 0) : value,
+          };
     const updatedPaid =
       name === "amount"
         ? [...updatedPayments].reduce((acc, payment) => acc + payment.amount, 0)
@@ -1015,37 +1091,19 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
                       </p>
                       <div className="cost-list flex flex-col gap-4">
                         {formState.form.costs &&
-                          formState.form.costs.map((cost, index) => (
-                            <div
-                              className="flex items-center gap-4 "
+                          formState.form.costs.map((cost, index) =>
+                            cost.itemType !== "tax" ? (
+                            <FinancialItemFields
                               key={`cost-${index}`}
-                            >
-                              <BaseInput
-                                type="text"
-                                name="name"
-                                value={cost.name}
-                                onChange={(e) => handleCostsChange(index, e)}
-                                placeholder="Type of Expense"
-                                className="flex-1"
-                              />
-                              <BaseInput
-                                type="number"
-                                name="amount"
-                                value={cost.amount}
-                                onChange={(e) => handleCostsChange(index, e)}
-                                placeholder="Cost"
-                                className="flex-1 pr-3"
-                              />
-                              <span
-                                className=" material-symbols-outlined cursor-pointer hover:text-red-500"
-                                onClick={() => {
-                                  removeEventCost(index);
-                                }}
-                              >
-                                delete
-                              </span>
-                            </div>
-                          ))}
+                              cost={cost}
+                              properties={getProperties(formState.form)}
+                              onChange={(name, value) =>
+                                handleCostsChange(index, name, value)
+                              }
+                              onDelete={() => removeEventCost(index)}
+                            />
+                            ) : null
+                          )}
                       </div>
                       <div className="flex items-center justify-end relative">
                         <button
@@ -1116,7 +1174,12 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
                     />
                   </div>
                   {addTax && (
-                    <div>
+                    <div className="flex flex-col gap-3">
+                      <FinancialPropertySelect
+                        value={taxItem?.property}
+                        properties={getProperties(formState.form)}
+                        onChange={setTaxProperty}
+                      />
                       <h3 className="title w-full text-right">
                         Tax 18% :{" "}
                         {formState.form.tax
@@ -1188,6 +1251,20 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
                                 }}
                               />
                             </div>
+                            <BaseInput
+                              type="text"
+                              name="details"
+                              value={payment.details?.notes ?? ""}
+                              className="w-full"
+                              placeholder="Payment details (bank account, reference, etc.)"
+                              onChange={(event) =>
+                                handlePaymentChange(
+                                  "details",
+                                  event.target.value,
+                                  index
+                                )
+                              }
+                            />
                           </div>
                           <span
                             className=" material-symbols-outlined cursor-pointer hover:text-red-500"

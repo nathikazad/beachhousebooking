@@ -143,7 +143,9 @@ const EditEventComponent: React.FC<EditEventFormProps> = ({
               className="flex items-center px-4 py-2 rounded-lg bg-typo_light-100 justify-between"
               key={`cost-${index}`}
             >
-              <label className="label_text !font-medium">{cost.name}: </label>
+              <label className="label_text !font-medium">
+                {cost.name} ({cost.property ?? "Unassigned"}):
+              </label>
               <label className="label_text !font-medium">
                 ₹{cost.amount.toLocaleString("en-IN")}
               </label>

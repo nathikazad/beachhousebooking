@@ -52,3 +52,33 @@ Before the occupancy table exists remotely, use
 `npm run db:audit-pre-migration` to generate a read-only audit from the
 latest booking JSON. Generated reports are ignored because they contain
 customer information.
+
+## Booking financial rollout
+
+The `20260730122310_create_booking_financial_tables.sql` migration creates
+normalized cost/tax items, payments, security deposits, and a derived totals
+view.
+
+Safe rollout:
+
+1. Run all application and migration unit tests.
+2. Apply `migrations/20260730122310_create_booking_financial_tables.sql`.
+3. Deploy the compatibility application. It reads normalized rows when
+   present and otherwise reads version-1 legacy financial JSON.
+4. Run `npm run db:backfill-financials` from `spa` as a dry run.
+5. Review every reported malformed value.
+6. Run `npm run db:backfill-financials -- --apply`. The command refuses to
+   apply when issues exist unless `--skip-malformed` is explicitly supplied.
+7. Run `npm run db:backfill-financials -- --verify` to reconcile database row
+   counts and monetary totals against the latest legacy JSON.
+
+The backfill uses only the latest booking JSON snapshot. Costs and tax receive
+the booking property only when the booking has exactly one property; zero- and
+multi-property legacy bookings remain unassigned. Every new application cost
+or tax requires a property.
+
+New application snapshots use encoding version 2 and contain no costs, tax,
+payments, deposits, or financial totals. Older JSON history remains unchanged.
+The backfill locks and rechecks each booking before replacement and skips
+version-2 bookings, so it cannot overwrite financial rows written by the new
+application while migration is running.

@@ -1,4 +1,4 @@
-import { BookingForm } from "@/utils/lib/bookingType";
+import { BookingDB, BookingForm } from "@/utils/lib/bookingType";
 import { invalidateDoubleBookingAuditCache } from "@/utils/lib/doubleBookingAuditCache";
 import { supabase } from "@/utils/supabase/client";
 
@@ -45,6 +45,38 @@ export const createBooking = async (bookingForm: BookingForm) => {
 
   }
   return bookingId;
+}
+
+export async function getBookingHistory(
+  identifier: { bookingId: number } | { clientViewId: string }
+): Promise<BookingDB[]> {
+  const query = new URLSearchParams(
+    "bookingId" in identifier
+      ? { bookingId: String(identifier.bookingId) }
+      : { clientViewId: identifier.clientViewId }
+  );
+  const headers: HeadersInit = {};
+
+  if ("bookingId" in identifier) {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) {
+      throw new Error("Please sign in again to view this booking.");
+    }
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`/api/booking?${query.toString()}`, {
+    cache: "no-store",
+    headers,
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Unable to load booking.");
+  }
+
+  return data.history;
 }
 
 export const deleteBooking = async (bookingId: number) => {
