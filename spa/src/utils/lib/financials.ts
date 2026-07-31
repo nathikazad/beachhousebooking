@@ -177,13 +177,15 @@ export function validateBookingFinancials(
   const { costItems } = financials;
   const unassigned = costItems.filter(
     (item) =>
-      !item.property && !(allowLegacyUnassigned && item.id !== undefined)
+      item.itemType === "cost" &&
+      !item.property &&
+      !(allowLegacyUnassigned && item.id !== undefined)
   );
 
   if (unassigned.length > 0) {
     const names = unassigned.map((item) => item.name || "Unnamed item");
     throw new Error(
-      `Select a property for every cost and tax item: ${names.join(", ")}.`
+      `Select a property for every cost item: ${names.join(", ")}.`
     );
   }
 
@@ -195,6 +197,7 @@ export function validateBookingFinancials(
     ])
   );
   const invalidProperty = costItems.find((item) => {
+    if (item.itemType === "tax") return false;
     if (!item.property) return false;
     const allowedProperties =
       item.eventId === undefined

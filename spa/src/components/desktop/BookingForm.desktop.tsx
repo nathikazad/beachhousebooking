@@ -34,11 +34,10 @@ import {
   getBookingHistory,
   getLatestBookingHistory,
 } from "@/utils/serverCommunicator";
-import ToggleButton from "../ui/ToggleButton";
 import BaseModalComponent from "../ui/BaseModal";
-import FinancialItemFields, {
-  FinancialPropertySelect,
-} from "../FinancialItemFields";
+import FinancialItemFields from "../FinancialItemFields";
+import BookingTaxFields from "../BookingTaxFields";
+import { setSingleBookingTaxAmount } from "@/utils/lib/gst";
 
 enum Page {
   BookingPage,
@@ -95,7 +94,6 @@ export default function BookingFormComponent({
           }));
           setHistoryCount(loadedHistoryCount);
           setIsSwitchOn(newData.bookingType === "Stay" ? false : true);
-          setAddTax(!!newData.tax);
           setShowSecurityDeposit(
             !!newData?.securityDeposit?.originalSecurityAmount
           );
@@ -370,79 +368,30 @@ export default function BookingFormComponent({
   //**********************start tax settings **********************
 
   useEffect(() => {
-    const afterTaxTotal = addTax
-      ? formState.form.totalCost + (formState.form.totalCost / 100) * 18
-      : formState.form.totalCost;
-    const tax = addTax ? (formState.form.totalCost / 100) * 18 : 0;
     setFormState((prevState) => ({
       ...prevState,
       form: {
         ...prevState.form,
-        costs: prevState.form.costs.map((cost) =>
-          cost.itemType === "tax" ? { ...cost, amount: tax } : cost
-        ),
-        tax: tax,
-        afterTaxTotal: afterTaxTotal,
-        outstanding: afterTaxTotal - formState.form.paid,
+        afterTaxTotal: prevState.form.totalCost + (prevState.form.tax ?? 0),
+        outstanding:
+          prevState.form.totalCost +
+          (prevState.form.tax ?? 0) -
+          prevState.form.paid,
       },
     }));
   }, [formState.form.totalCost]);
-  //Add tax switcher
-  const [addTax, setAddTax] = useState<boolean>(false);
-  const addTaxChanged = (e: ChangeEvent<HTMLInputElement>) => {
-    const { checked } = e.target;
-    const afterTaxTotal = checked
-      ? formState.form.totalCost + (formState.form.totalCost / 100) * 18
-      : formState.form.totalCost;
-    const tax = checked ? (formState.form.totalCost / 100) * 18 : 0;
-    setFormState((prevState) => ({
-      ...prevState,
-      form: {
-        ...prevState.form,
-        costs: checked
-          ? [
-              ...prevState.form.costs.filter(
-                (cost) => cost.itemType !== "tax"
-              ),
-              {
-                ...(prevState.form.costs.find(
-                  (cost) => cost.itemType === "tax"
-                ) ?? {}),
-                name: "GST 18%",
-                amount: tax,
-                itemType: "tax",
-                property:
-                  prevState.form.costs.find(
-                    (cost) => cost.itemType === "tax"
-                  )?.property ??
-                  (getProperties(prevState.form).length === 1
-                    ? getProperties(prevState.form)[0]
-                    : undefined),
-              },
-            ]
-          : prevState.form.costs.filter(
-              (cost) => cost.itemType !== "tax"
-            ),
-        tax: tax,
-        afterTaxTotal: afterTaxTotal,
-        outstanding: afterTaxTotal - prevState.form.paid,
-      },
-    }));
-    setAddTax(checked);
-    setEdited(true);
-  };
 
-  const taxItem = formState.form.costs.find(
-    (cost) => cost.itemType === "tax"
-  );
-  const setTaxProperty = (property: Property | undefined) => {
+  const handleTaxAmountChange = (amount: number) => {
+    const tax = Number.isFinite(amount) && amount >= 0 ? amount : 0;
     setFormState((prevState) => ({
       ...prevState,
       form: {
         ...prevState.form,
-        costs: prevState.form.costs.map((cost) =>
-          cost.itemType === "tax" ? { ...cost, property } : cost
-        ),
+        costs: setSingleBookingTaxAmount(prevState.form.costs, tax),
+        tax,
+        afterTaxTotal: prevState.form.totalCost + tax,
+        outstanding:
+          prevState.form.totalCost + tax - prevState.form.paid,
       },
     }));
     setEdited(true);
@@ -1256,40 +1205,12 @@ export default function BookingFormComponent({
                     </div>
                   )}
                   {/* Tax part */}
-                  <div className="flex items-center justify-end mb-3">
-                    <ToggleButton
-                      name="tax"
-                      checked={addTax}
-                      onChange={addTaxChanged}
-                      label="GST"
-                    />
-                  </div>
-                  {addTax && (
-                    <div className="flex flex-col gap-3">
-                      <FinancialPropertySelect
-                        value={taxItem?.property}
-                        properties={getProperties(formState.form)}
-                        onChange={setTaxProperty}
-                      />
-                      <h3 className="title text-right flex items-center justify-between">
-                        <span>Tax 18%</span>
-                        <span>
-                          {formState.form.tax
-                            ? `₹ ${formState.form.tax.toLocaleString("en-IN")}`
-                            : "₹ 0"}
-                        </span>
-                      </h3>
-
-                      <h3 className="title text-right flex items-center justify-between">
-                        <span>Total after tax</span>
-                        <span>
-                          {formState.form.afterTaxTotal
-                            ? `₹ ${formState.form.afterTaxTotal.toLocaleString("en-IN")}`
-                            : "₹ 0"}
-                        </span>
-                      </h3>
-                    </div>
-                  )}
+                  <BookingTaxFields
+                    totalCost={formState.form.totalCost}
+                    taxAmount={formState.form.tax ?? 0}
+                    afterTaxTotal={formState.form.afterTaxTotal}
+                    onTaxAmountChange={handleTaxAmountChange}
+                  />
                 </div>
               )}
 

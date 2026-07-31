@@ -158,12 +158,23 @@ describe("booking financial transformation", () => {
     expect(hydrated.outstanding).toBe(3900);
   });
 
-  it("requires a property for every new cost and tax item", () => {
+  it("allows booking-level tax without a property", () => {
     const source = booking();
     source.costs.push({
       name: "Unassigned tax",
       amount: 100,
       itemType: "tax",
+    });
+
+    expect(() => validateBookingFinancials(source)).not.toThrow();
+  });
+
+  it("requires a property for every new cost item", () => {
+    const source = booking();
+    source.costs.push({
+      name: "Unassigned cost",
+      amount: 100,
+      itemType: "cost",
     });
 
     expect(() => validateBookingFinancials(source)).toThrow(

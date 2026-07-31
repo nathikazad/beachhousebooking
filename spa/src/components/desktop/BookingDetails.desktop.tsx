@@ -523,13 +523,7 @@ export default function BookingDetailsComponent({
                   {!!formState.form.tax && (
                     <div className="flex flex-col gap-2 ">
                       <label className="title w-full  !font-bold flex items-center justify-start">
-                        <strong className=" w-1/2">
-                          Tax 18% (
-                          {formState.form.costs.find(
-                            (cost) => cost.itemType === "tax"
-                          )?.property ?? "Unassigned"}
-                          )
-                        </strong>{" "}
+                        <strong className=" w-1/2">GST</strong>{" "}
                         <span className="flex-1 text-right">
                           {formState.form.tax
                             ? `₹ ${formState.form.tax.toLocaleString("en-IN")}`

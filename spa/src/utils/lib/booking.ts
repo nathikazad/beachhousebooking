@@ -11,6 +11,7 @@ import {
   formatBookingConflictMessage,
 } from "./occupancy";
 import { validateBookingFinancials } from "./financials";
+import { normalizeBookingTax } from "./gst";
 
 function capitalizeString(str: string): string {
   return str.replace(/\b\w/g, l => l.toUpperCase());
@@ -34,7 +35,7 @@ export async function checkForDoubleBooking(booking: BookingDB): Promise<{
 }
 
 export async function mutateBookingState(booking: BookingForm, user: User): Promise<number> {
-  let newBooking: BookingDB = {
+  let newBooking: BookingDB = normalizeBookingTax({
     ...booking,
     startDateTime: booking.startDateTime!,
     endDateTime: booking.endDateTime!,
@@ -63,7 +64,7 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
         dateTime: payment.dateTime || new Date().toISOString()
       }
     })
-  }
+  });
   // TODO: add ids after booking id is generated, to reduce chance of collission
   for (let event of newBooking.events) {
     event.eventId = event.eventId || Math.floor(Math.random() * 1000000);
