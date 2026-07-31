@@ -48,7 +48,7 @@ export default function BookingListTable({
             <th className="w-24 px-3 py-3">
               {isLog ? "Created" : "Check-in"}
             </th>
-            <th className="px-3 py-3">Name</th>
+            <th className="w-28 px-3 py-3 tablet-up:w-36">Name</th>
             <th className="w-32 px-3 py-3">Property</th>
             <th className="hidden w-24 px-3 py-3 mobile-up:table-cell">
               Status
@@ -119,13 +119,18 @@ export default function BookingListTable({
                   isLog ? booking.createdDateTime : booking.startDateTime
                 )}
               </td>
-              <td className="truncate px-3 py-3 font-medium text-neutral-900">
-                {booking.client.name}
-                {booking.starred ? (
-                  <span className="material-symbols-filled ml-1 align-middle text-base">
-                    star_rate
-                  </span>
-                ) : null}
+              <td
+                className="max-w-0 px-3 py-3 font-medium text-neutral-900"
+                title={booking.client.name}
+              >
+                <div className="flex min-w-0 items-center">
+                  <span className="min-w-0 truncate">{booking.client.name}</span>
+                  {booking.starred ? (
+                    <span className="material-symbols-filled ml-1 shrink-0 text-base">
+                      star_rate
+                    </span>
+                  ) : null}
+                </div>
               </td>
               <td className="truncate px-3 py-3 text-slate-600">
                 {booking.properties?.join(", ") || "—"}

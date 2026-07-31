@@ -102,6 +102,23 @@ export interface CheckInAuditRow {
   total: number;
 }
 
+export interface CheckInAuditTotals {
+  tax: number;
+  total: number;
+}
+
+export function summarizeCheckInAuditRows(
+  rows: Array<Pick<CheckInAuditRow, "tax" | "total">>
+): CheckInAuditTotals {
+  return rows.reduce(
+    (summary, row) => ({
+      tax: summary.tax + row.tax,
+      total: summary.total + row.total,
+    }),
+    { tax: 0, total: 0 }
+  );
+}
+
 function parseDatabaseProperties(
   value: string[] | string | null
 ): Property[] {

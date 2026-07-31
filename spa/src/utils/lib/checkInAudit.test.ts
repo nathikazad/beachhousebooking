@@ -6,6 +6,7 @@ import {
   getCurrentCheckInAuditPeriod,
   rowsForCheckInAuditTab,
   rowsForCheckInAuditPeriod,
+  summarizeCheckInAuditRows,
   summarizeCheckInPayments,
 } from "./checkInAudit";
 
@@ -61,6 +62,24 @@ describe("summarizeCheckInPayments", () => {
       advanceReceivedDate: null,
       remainingPaymentAmount: 0,
       remainingPaymentReceivedDate: null,
+    });
+  });
+});
+
+describe("summarizeCheckInAuditRows", () => {
+  it("sums the displayed tax and total amounts", () => {
+    expect(
+      summarizeCheckInAuditRows([
+        { tax: 180, total: 1180 },
+        { tax: 72.5, total: 572.5 },
+      ])
+    ).toEqual({ tax: 252.5, total: 1752.5 });
+  });
+
+  it("returns zero totals when there are no rows", () => {
+    expect(summarizeCheckInAuditRows([])).toEqual({
+      tax: 0,
+      total: 0,
     });
   });
 });

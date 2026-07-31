@@ -17,6 +17,7 @@ import {
   getCurrentCheckInAuditPeriod,
   rowsForCheckInAuditPeriod,
   rowsForCheckInAuditTab,
+  summarizeCheckInAuditRows,
 } from "@/utils/lib/checkInAudit";
 import {
   CheckInAuditResponse,
@@ -108,6 +109,10 @@ export default function CheckInAuditPage() {
     });
     return rowsForCheckInAuditTab(periodRows, activeTab);
   }, [activeTab, audit, selectedMonth, selectedYear]);
+  const totals = useMemo(
+    () => summarizeCheckInAuditRows(rows),
+    [rows]
+  );
 
   return (
     <div className="flex w-full flex-col gap-5 pb-8 laptop-up:px-10">
@@ -271,6 +276,20 @@ export default function CheckInAuditPage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="border-t-2 border-[#D0D0D0] bg-[#F4F4F4]">
+                  <tr>
+                    <td
+                      className="px-3 py-3 text-right font-bold"
+                      colSpan={2}
+                    >
+                      Total
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold">
+                      {formatCheckInAuditMoney(totals.total)}
+                    </td>
+                    <td aria-hidden="true" className="px-2 py-3" />
+                  </tr>
+                </tfoot>
               </table>
             </div>
 
@@ -361,6 +380,23 @@ export default function CheckInAuditPage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="border-t-2 border-[#D0D0D0] bg-[#F4F4F4]">
+                  <tr>
+                    <td
+                      className="px-4 py-3 text-right font-bold"
+                      colSpan={8}
+                    >
+                      Total
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-bold">
+                      {formatCheckInAuditMoney(totals.tax)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-bold">
+                      {formatCheckInAuditMoney(totals.total)}
+                    </td>
+                    <td aria-hidden="true" className="px-2 py-3" />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </>
