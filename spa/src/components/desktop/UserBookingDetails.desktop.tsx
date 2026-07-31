@@ -17,7 +17,7 @@ import CreateEventComponent from "../CreateEventForm";
 import EventDetailsComponentDesktop from "../desktop/EventDetails.desktop";
 
 import Link from "next/link";
-import { getBookingHistory } from "@/utils/serverCommunicator";
+import { getLatestBookingHistory } from "@/utils/serverCommunicator";
 
 enum Page {
   BookingPage,
@@ -59,7 +59,9 @@ export default function BookingDetailsComponent({
     console.log("useEffect booking id", bookingId);
     console.log("====================================");
     if (bookingId) {
-      getBookingHistory({ clientViewId: String(bookingId) }).then((history) => {
+      getLatestBookingHistory({
+        clientViewId: String(bookingId),
+      }).then(({ history }) => {
           const currentIndex = history.length - 1;
           const newData = history[currentIndex];
           if (!newData) return;

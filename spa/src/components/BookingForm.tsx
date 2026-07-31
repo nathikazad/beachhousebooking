@@ -30,6 +30,7 @@ import {
   createBooking,
   deleteBooking,
   getBookingHistory,
+  getLatestBookingHistory,
 } from "@/utils/serverCommunicator";
 import ToggleButton from "./ui/ToggleButton";
 import BaseModalComponent from "./ui/BaseModal";
@@ -68,6 +69,7 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
   const returnTo = searchParams.get("returnTo");
   const [formErrors, setFormErrors] = useState({} as formDataToValidate);
   const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
+  const [historyCount, setHistoryCount] = useState(1);
   const [errorModal, setErrorModal] = useState<string>("");
   const [exitModal, setExitModal] = useState<boolean>(false);
   const [edited, setEdited] = useState<boolean>(false);
@@ -75,8 +77,8 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
   const formRef = useRef<any>(null)
   useEffect(() => {
     if (bookingId) {
-      getBookingHistory({ bookingId })
-        .then((history) => {
+      getLatestBookingHistory({ bookingId })
+        .then(({ history, historyCount: loadedHistoryCount }) => {
           const currentIndex = history.length - 1;
           const newData = history[currentIndex];
           if (!newData) return;
@@ -87,6 +89,7 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
             allData: history,
             currentIndex: currentIndex,
           }));
+          setHistoryCount(loadedHistoryCount);
           setIsSwitchOn(newData.bookingType === "Stay" ? false : true);
           setAddTax(!!newData.tax);
           setShowSecurityDeposit(
@@ -100,7 +103,7 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
     }
   }, [bookingId]);
 
-  function moveFormState(direction: "next" | "previous") {
+  async function moveFormState(direction: "next" | "previous") {
     if (direction === "next") {
       if (formState.currentIndex === formState.allData.length - 1) return;
       setFormState((prevState) => ({
@@ -110,6 +113,32 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
         currentIndex: prevState.currentIndex + 1,
       }));
     } else {
+      if (
+        bookingId &&
+        formState.allData.length === 1 &&
+        historyCount > 1
+      ) {
+        try {
+          const history = await getBookingHistory({ bookingId });
+          const currentIndex = history.length - 2;
+          const previousBooking = history[currentIndex];
+          if (!previousBooking) return;
+
+          setHistoryCount(history.length);
+          setFormState((prevState) => ({
+            ...prevState,
+            form: previousBooking,
+            bookingDB: previousBooking,
+            allData: history,
+            currentIndex,
+          }));
+        } catch (error) {
+          setErrorModal(
+            error instanceof Error ? error.message : "Unable to load history."
+          );
+        }
+        return;
+      }
       if (formState.currentIndex === 0) return;
       setFormState((prevState) => ({
         ...prevState,
@@ -1454,11 +1483,15 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
         {bookingId && formState.pageToShow === Page.BookingPage && (
           <div className="my-4">
             <div className="flex items-center justify-between ">
-              {formState.currentIndex != 0 && (
+              {(formState.currentIndex != 0 ||
+                historyCount > formState.allData.length) && (
                 <button
-                  className={`${formState.currentIndex !== 0 && "text-selectedButton"} bg-transparent flex items-center justify-center`}
+                  className="text-selectedButton bg-transparent flex items-center justify-center"
                   onClick={() => moveFormState("previous")}
-                  disabled={formState.currentIndex === 0}
+                  disabled={
+                    formState.currentIndex === 0 &&
+                    historyCount <= formState.allData.length
+                  }
                   type="button"
                 >
                   <span className="material-symbols-outlined cursor-pointer">
@@ -1466,7 +1499,8 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
                   </span>
                 </button>
               )}
-              {formState.currentIndex == 0 && <p></p>}
+              {formState.currentIndex == 0 &&
+                historyCount <= formState.allData.length && <p></p>}
               <div className="small-text">
                 {" "}
                 <p>

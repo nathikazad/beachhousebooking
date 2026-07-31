@@ -1,6 +1,8 @@
 import { BookingDB, BookingForm } from "@/utils/lib/bookingType";
 import {
+  BookingHistorySnapshot,
   invalidateBookingHistoryCache,
+  loadLatestBookingCached,
   loadBookingHistoryCached,
 } from "@/utils/lib/bookingHistoryCache";
 import { invalidateCheckInAuditCache } from "@/utils/lib/checkInAuditCache";
@@ -61,21 +63,41 @@ export async function getBookingHistory(
 ): Promise<BookingDB[]> {
   if ("bookingId" in identifier) {
     return loadBookingHistoryCached(identifier.bookingId, () =>
-      fetchBookingHistory(identifier)
+      fetchBookingHistory(identifier, true).then(
+        (snapshot) => snapshot.history
+      )
     );
   }
 
-  return fetchBookingHistory(identifier);
+  return fetchBookingHistory(identifier, true).then(
+    (snapshot) => snapshot.history
+  );
+}
+
+export async function getLatestBookingHistory(
+  identifier: { bookingId: number } | { clientViewId: string }
+): Promise<BookingHistorySnapshot> {
+  if ("bookingId" in identifier) {
+    return loadLatestBookingCached(identifier.bookingId, () =>
+      fetchBookingHistory(identifier, false)
+    );
+  }
+
+  return fetchBookingHistory(identifier, false);
 }
 
 async function fetchBookingHistory(
-  identifier: { bookingId: number } | { clientViewId: string }
-): Promise<BookingDB[]> {
+  identifier: { bookingId: number } | { clientViewId: string },
+  includeHistory: boolean
+): Promise<BookingHistorySnapshot> {
   const query = new URLSearchParams(
     "bookingId" in identifier
       ? { bookingId: String(identifier.bookingId) }
       : { clientViewId: identifier.clientViewId }
   );
+  if (includeHistory) {
+    query.set("includeHistory", "true");
+  }
   const headers: HeadersInit = {};
 
   if ("bookingId" in identifier) {
@@ -97,7 +119,10 @@ async function fetchBookingHistory(
     throw new Error(data.message || "Unable to load booking.");
   }
 
-  return data.history;
+  return {
+    history: data.history,
+    historyCount: Number(data.historyCount ?? data.history.length),
+  };
 }
 
 export const deleteBooking = async (bookingId: number) => {

@@ -2,7 +2,7 @@ import { BookingDB, BookingForm, Property, convertStringOnlyToProperty, convertS
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Month, TimeSlot, generateHourAvailabilityMap, getTimeSlots, monthConvert } from '@/utils/lib/availabilityMap';
 import { removeSpacesAndCapitalize } from '@/utils/lib/helper';
-import { fetchBooking } from '@/utils/lib/db';
+import { fetchLatestBooking } from '@/utils/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   switch (req.method) {
@@ -21,8 +21,10 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
   let internalMonth = (month as string).toLocaleLowerCase() as Month
   let calendarIds: string[] = [];
   if(bookingId) {
-    let booking = await fetchBooking(parseInt(bookingId as string));
-    let lastBooking: BookingDB = booking[booking.length - 1];
+    const { history } = await fetchLatestBooking(
+      parseInt(bookingId as string)
+    );
+    let lastBooking: BookingDB = history[0];
     
     if(lastBooking.bookingType == "Stay") {
       let values = Object.values(lastBooking.calendarIds ?? []); 
@@ -40,4 +42,3 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
   let timeSlots: TimeSlot[] = await getTimeSlots(internalMonth, propertiesInternal, year as string, calendarIds);
   res.status(200).json(generateHourAvailabilityMap(timeSlots, monthConvert[internalMonth], parseInt(year as string)));
 };
-

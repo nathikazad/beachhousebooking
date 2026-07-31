@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearBookingHistoryCache,
   invalidateBookingHistoryCache,
+  loadLatestBookingCached,
   loadBookingHistoryCached,
   readBookingHistoryCache,
 } from "./bookingHistoryCache";
@@ -72,6 +73,56 @@ describe("booking history cache", () => {
     await expect(mobileRequest).resolves.toHaveLength(1);
     await expect(desktopRequest).resolves.toHaveLength(1);
     expect(loader).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates simultaneous latest-version requests", async () => {
+    const loader = vi.fn(async () => ({
+      history: [booking("Latest")],
+      historyCount: 4,
+    }));
+
+    const mobileRequest = loadLatestBookingCached(42, loader);
+    const desktopRequest = loadLatestBookingCached(42, loader);
+
+    await expect(mobileRequest).resolves.toMatchObject({
+      historyCount: 4,
+    });
+    await expect(desktopRequest).resolves.toMatchObject({
+      historyCount: 4,
+    });
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves the latest version from a complete cached history", async () => {
+    await loadBookingHistoryCached(42, async () => [
+      booking("Original"),
+      booking("Latest"),
+    ]);
+    const latestLoader = vi.fn();
+
+    const result = await loadLatestBookingCached(42, latestLoader);
+
+    expect(result.history).toHaveLength(1);
+    expect(result.history[0].client.name).toBe("Latest");
+    expect(result.historyCount).toBe(2);
+    expect(latestLoader).not.toHaveBeenCalled();
+  });
+
+  it("fetches complete history after caching only the latest version", async () => {
+    await loadLatestBookingCached(42, async () => ({
+      history: [booking("Latest")],
+      historyCount: 3,
+    }));
+    const historyLoader = vi.fn(async () => [
+      booking("Original"),
+      booking("Second"),
+      booking("Latest"),
+    ]);
+
+    const result = await loadBookingHistoryCached(42, historyLoader);
+
+    expect(result).toHaveLength(3);
+    expect(historyLoader).toHaveBeenCalledTimes(1);
   });
 
   it("returns clones so unsaved edits cannot change cached details", async () => {

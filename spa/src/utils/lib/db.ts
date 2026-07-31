@@ -106,45 +106,103 @@ async function replaceBookingFinancials(
     );
 }
 
-async function fetchBookingFinancials(
-    bookingId: number
-): Promise<BookingFinancialRecords> {
-    const [costItems, payments, deposits] = await Promise.all([
-        query(
-            `
-            SELECT id, property, event_id, item_type, name, amount
-            FROM public.booking_cost_items
-            WHERE booking_id = $1
-            ORDER BY id`,
-            [bookingId]
-        ),
-        query(
-            `
-            SELECT id, amount, payment_method, payment_date, received_by, details
-            FROM public.booking_payments
-            WHERE booking_id = $1
-            ORDER BY payment_date, id`,
-            [bookingId]
-        ),
-        query(
-            `
-            SELECT amount, payment_method, amount_returned, date_returned
-            FROM public.booking_security_deposits
-            WHERE booking_id = $1`,
-            [bookingId]
-        ),
-    ]);
+interface BookingReadRow {
+    id: string | number;
+    history: BookingDB[];
+    history_count: string | number;
+    cost_items: Array<{
+        id: string | number;
+        property: string | null;
+        event_id: string | number | null;
+        item_type: "cost" | "tax";
+        name: string;
+        amount: string | number;
+    }>;
+    payments: Array<{
+        id: string | number;
+        amount: string | number;
+        payment_method: Payment["paymentMethod"];
+        payment_date: string | Date;
+        received_by: Employee | null;
+        details: Record<string, string>;
+    }>;
+    security_deposit: {
+        amount: string | number;
+        payment_method: Payment["paymentMethod"];
+        amount_returned: string | number;
+        date_returned: string | Date | null;
+    } | null;
+}
 
-    const deposit = deposits[0];
+export interface BookingReadResult {
+    history: BookingDB[];
+    historyCount: number;
+}
+
+const BOOKING_READ_COLUMNS = `
+    booking.id,
+    CASE
+        WHEN $2::boolean
+            THEN to_jsonb(booking.json)
+        ELSE jsonb_build_array(
+            booking.json[array_upper(booking.json, 1)]
+        )
+    END AS history,
+    coalesce(array_length(booking.json, 1), 0) AS history_count,
+    coalesce(
+        (
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'id', cost.id,
+                    'property', cost.property,
+                    'event_id', cost.event_id,
+                    'item_type', cost.item_type,
+                    'name', cost.name,
+                    'amount', cost.amount
+                )
+                ORDER BY cost.id
+            )
+            FROM public.booking_cost_items cost
+            WHERE cost.booking_id = booking.id
+        ),
+        '[]'::jsonb
+    ) AS cost_items,
+    coalesce(
+        (
+            SELECT jsonb_agg(
+                jsonb_build_object(
+                    'id', payment.id,
+                    'amount', payment.amount,
+                    'payment_method', payment.payment_method,
+                    'payment_date', payment.payment_date,
+                    'received_by', payment.received_by,
+                    'details', payment.details
+                )
+                ORDER BY payment.payment_date, payment.id
+            )
+            FROM public.booking_payments payment
+            WHERE payment.booking_id = booking.id
+        ),
+        '[]'::jsonb
+    ) AS payments,
+    (
+        SELECT jsonb_build_object(
+            'amount', deposit.amount,
+            'payment_method', deposit.payment_method,
+            'amount_returned', deposit.amount_returned,
+            'date_returned', deposit.date_returned
+        )
+        FROM public.booking_security_deposits deposit
+        WHERE deposit.booking_id = booking.id
+    ) AS security_deposit`;
+
+function bookingFinancialsFromRow(
+    bookingId: number,
+    row: BookingReadRow
+): BookingFinancialRecords {
+    const deposit = row.security_deposit;
     return {
-        costItems: costItems.map((item: {
-            id: string | number;
-            property: string | null;
-            event_id: string | number | null;
-            item_type: "cost" | "tax";
-            name: string;
-            amount: string | number;
-        }) => ({
+        costItems: row.cost_items.map((item) => ({
             id: Number(item.id),
             bookingId,
             property: propertyFromDatabaseValue(item.property),
@@ -154,14 +212,7 @@ async function fetchBookingFinancials(
             name: item.name,
             amount: Number(item.amount),
         })),
-        payments: payments.map((payment: {
-            id: string | number;
-            amount: string | number;
-            payment_method: Payment["paymentMethod"];
-            payment_date: string | Date;
-            received_by: Employee | null;
-            details: Record<string, string>;
-        }) => ({
+        payments: row.payments.map((payment) => ({
             id: Number(payment.id),
             bookingId,
             amount: Number(payment.amount),
@@ -184,13 +235,13 @@ async function fetchBookingFinancials(
     };
 }
 
-async function hydrateLatestBooking(
+function hydrateLatestBooking(
     bookingId: number,
-    history: BookingDB[]
-): Promise<BookingDB[]> {
+    history: BookingDB[],
+    financials: BookingFinancialRecords
+): BookingDB[] {
     if (history.length === 0) return history;
 
-    const financials = await fetchBookingFinancials(bookingId);
     const currentIndex = history.length - 1;
     const latest = history[currentIndex];
     if (shouldUseLegacyFinancials(latest, financials)) {
@@ -214,6 +265,53 @@ async function hydrateLatestBooking(
                 )
                 : booking
     );
+}
+
+function bookingReadResult(row: BookingReadRow): BookingReadResult {
+    const bookingId = Number(row.id);
+    const history = row.history ?? [];
+    const financials = bookingFinancialsFromRow(bookingId, row);
+
+    return {
+        history: hydrateLatestBooking(bookingId, history, financials),
+        historyCount: Number(row.history_count),
+    };
+}
+
+async function fetchBookingReadById(
+    id: number,
+    includeHistory: boolean
+): Promise<BookingReadResult> {
+    const rows = await query(
+        `
+        SELECT ${BOOKING_READ_COLUMNS}
+        FROM public.bookings booking
+        WHERE booking.id = $1`,
+        [id, includeHistory]
+    );
+    if (rows.length === 0) {
+        throw new Error("Booking not found");
+    }
+
+    return bookingReadResult(rows[0] as BookingReadRow);
+}
+
+async function fetchBookingReadByClientViewId(
+    clientViewId: string,
+    includeHistory: boolean
+): Promise<BookingReadResult> {
+    const rows = await query(
+        `
+        SELECT ${BOOKING_READ_COLUMNS}
+        FROM public.bookings booking
+        WHERE booking.client_view_id = $1`,
+        [clientViewId, includeHistory]
+    );
+    if (rows.length === 0) {
+        throw new Error("Booking not found");
+    }
+
+    return bookingReadResult(rows[0] as BookingReadRow);
 }
 
 export async function findBookingConflicts(
@@ -409,25 +507,25 @@ export async function updateBooking(booking: BookingDB[], id: number) {
 }
 
 export async function fetchBooking(id: number): Promise<BookingDB[]> {
-    const result = await query('SELECT * FROM bookings WHERE id = $1', [id]);
-    if (result.length === 0) {
-        throw new Error("Booking not found");
-    }
-    return hydrateLatestBooking(id, result[0].json ?? []);
+    return (await fetchBookingReadById(id, true)).history;
+}
+
+export async function fetchLatestBooking(
+    id: number
+): Promise<BookingReadResult> {
+    return fetchBookingReadById(id, false);
 }
 
 export async function fetchBookingByClientViewId(
     clientViewId: string
 ): Promise<BookingDB[]> {
-    const result = await query(
-        "SELECT id, json FROM bookings WHERE client_view_id = $1",
-        [clientViewId]
-    );
-    if (result.length === 0) {
-        throw new Error("Booking not found");
-    }
+    return (await fetchBookingReadByClientViewId(clientViewId, true)).history;
+}
 
-    return hydrateLatestBooking(Number(result[0].id), result[0].json ?? []);
+export async function fetchLatestBookingByClientViewId(
+    clientViewId: string
+): Promise<BookingReadResult> {
+    return fetchBookingReadByClientViewId(clientViewId, false);
 }
 
 export async function fetchCheckInAudit(): Promise<CheckInAuditRow[]> {

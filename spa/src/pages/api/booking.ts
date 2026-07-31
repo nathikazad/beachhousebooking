@@ -6,6 +6,8 @@ import { fetchUser, verifyAndGetPayload } from '@/utils/lib/auth';
 import {
   fetchBooking,
   fetchBookingByClientViewId,
+  fetchLatestBooking,
+  fetchLatestBookingByClientViewId,
 } from "@/utils/lib/db";
 
 export const config = {
@@ -33,22 +35,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
+  const startedAt = performance.now();
+  const timings: Array<{ name: string; duration: number }> = [];
+
+  const sendHistory = (
+    history: Awaited<ReturnType<typeof fetchBooking>>,
+    historyCount: number
+  ) => {
+    const serializationStartedAt = performance.now();
+    const payload = JSON.stringify({ history, historyCount });
+    timings.push({
+      name: "serialize",
+      duration: performance.now() - serializationStartedAt,
+    });
+    timings.push({
+      name: "total",
+      duration: performance.now() - startedAt,
+    });
+    res.setHeader(
+      "Server-Timing",
+      timings
+        .map(({ name, duration }) => `${name};dur=${duration.toFixed(1)}`)
+        .join(", ")
+    );
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).send(payload);
+  };
+
   try {
     const { bookingId, clientViewId } = req.query;
+    const includeHistory = req.query.includeHistory === "true";
 
     if (typeof clientViewId === "string") {
-      const history = await fetchBookingByClientViewId(clientViewId);
-      const publicHistory = history.map((booking) => ({
+      const databaseStartedAt = performance.now();
+      const result = includeHistory
+        ? {
+            history: await fetchBookingByClientViewId(clientViewId),
+            historyCount: 0,
+          }
+        : await fetchLatestBookingByClientViewId(clientViewId);
+      if (includeHistory) {
+        result.historyCount = result.history.length;
+      }
+      timings.push({
+        name: "database",
+        duration: performance.now() - databaseStartedAt,
+      });
+      const publicHistory = result.history.map((booking) => ({
         ...booking,
         payments: (booking.payments ?? []).map((payment) => {
           const { details: _details, ...publicPayment } = payment;
           return publicPayment;
         }),
       }));
-      return res.status(200).json({ history: publicHistory });
+      return sendHistory(publicHistory, result.historyCount);
     }
 
+    const authStartedAt = performance.now();
     await verifyAndGetPayload(req);
+    timings.push({
+      name: "auth",
+      duration: performance.now() - authStartedAt,
+    });
     if (typeof bookingId !== "string" || !Number.isInteger(Number(bookingId))) {
       return res.status(400).json({
         error: "INVALID_BOOKING_ID",
@@ -56,9 +104,26 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
       });
     }
 
-    const history = await fetchBooking(Number(bookingId));
-    return res.status(200).json({ history });
+    const databaseStartedAt = performance.now();
+    const result = includeHistory
+      ? {
+          history: await fetchBooking(Number(bookingId)),
+          historyCount: 0,
+        }
+      : await fetchLatestBooking(Number(bookingId));
+    if (includeHistory) {
+      result.historyCount = result.history.length;
+    }
+    timings.push({
+      name: "database",
+      duration: performance.now() - databaseStartedAt,
+    });
+    return sendHistory(result.history, result.historyCount);
   } catch (error) {
+    res.setHeader(
+      "Server-Timing",
+      `total;dur=${(performance.now() - startedAt).toFixed(1)}`
+    );
     const message =
       error instanceof Error ? error.message : "Unable to load booking.";
     const status = message === "Booking not found" ? 404 : 401;
