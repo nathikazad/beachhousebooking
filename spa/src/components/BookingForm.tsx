@@ -36,6 +36,7 @@ import BaseModalComponent from "./ui/BaseModal";
 import FinancialItemFields from "./FinancialItemFields";
 import BookingTaxFields from "./BookingTaxFields";
 import { setSingleBookingTaxAmount } from "@/utils/lib/gst";
+import { normalizeSecurityDepositInput } from "@/utils/lib/financials";
 
 
 enum Page {
@@ -479,7 +480,7 @@ export default function BookingFormComponent({ bookingId, className }: BookingFo
         ...prevState.form,
         securityDeposit: {
           ...prevState.form.securityDeposit,
-          [name]: value,
+          [name]: normalizeSecurityDepositInput(name, value),
         },
       },
     }));

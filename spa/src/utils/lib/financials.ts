@@ -51,6 +51,17 @@ export interface BookingFinancialTotals {
   outstanding: number;
 }
 
+export function normalizeSecurityDepositInput(
+  name: string,
+  value: string | number
+): string | number {
+  if (name !== "originalSecurityAmount" && name !== "amountReturned") {
+    return value;
+  }
+
+  return value === "" ? 0 : Number(value);
+}
+
 export interface BookingSummaryRow {
   id: string | number;
   json: BookingDB[];

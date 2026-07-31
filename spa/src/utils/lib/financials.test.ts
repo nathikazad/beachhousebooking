@@ -4,6 +4,7 @@ import {
   bookingSummaryFromRow,
   extractBookingFinancials,
   hydrateBookingFinancials,
+  normalizeSecurityDepositInput,
   stripFinancialData,
   shouldUseLegacyFinancials,
   validateBookingFinancials,
@@ -85,6 +86,22 @@ function booking(): BookingDB {
     encodingVersion: 1,
   };
 }
+
+describe("normalizeSecurityDepositInput", () => {
+  it("converts deposit amount fields from form strings to numbers", () => {
+    expect(
+      normalizeSecurityDepositInput("originalSecurityAmount", "25000")
+    ).toBe(25000);
+    expect(normalizeSecurityDepositInput("amountReturned", "5000")).toBe(5000);
+    expect(normalizeSecurityDepositInput("originalSecurityAmount", "")).toBe(
+      0
+    );
+  });
+
+  it("preserves non-amount deposit fields", () => {
+    expect(normalizeSecurityDepositInput("paymentMethod", "GPay")).toBe("GPay");
+  });
+});
 
 describe("booking financial transformation", () => {
   it("extracts booking, event, payment, and deposit records", () => {
