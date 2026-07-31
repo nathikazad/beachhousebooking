@@ -17,7 +17,6 @@ import React, {
   FormEvent,
   useRef,
 } from "react";
-import format from "date-fns/format";
 import { useRouter } from "next/router";
 import { supabase } from "@/utils/supabase/client";
 import SearchInput from "../ui/SearchInput";
@@ -38,6 +37,12 @@ import {
 import ListViewToggle from "../ListViewToggle";
 import BookingListTable from "../BookingListTable";
 import { useListViewPreference } from "@/utils/useListViewPreference";
+import {
+  bookingListDateBounds,
+  bookingListDateFilterLabel,
+  clearBookingListDateFilter,
+  isBoundedBookingList,
+} from "@/utils/lib/bookingListFilters";
 
 // interface BookingProps {
 //   bookingsFromParent: BookingDB[];
@@ -70,6 +75,11 @@ export default function ListBooking({ className }: ListBookingProps) {
 
   const [filterState, setFilterState] = useState<Filter>({
     checkIn: null,
+    dateMode: null,
+    dateFrom: null,
+    dateTo: null,
+    dateMonth: null,
+    dateYear: null,
     properties: null,
     starred: null,
     paymentPending: null,
@@ -80,6 +90,8 @@ export default function ListBooking({ className }: ListBookingProps) {
   const [loadingBackward, setLoadingBackward] = useState<boolean>(false);
   const forwardLoaderRef = useRef<HTMLDivElement | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(true); // Indicates if more items can be loaded
+  const bounded =
+    !state.searchText && isBoundedBookingList(filterState, "checkIn");
   useEffect(() => {
     // Subscribe to the layout button click event
     eventEmitter.on("filterBtnClicked", toggleFilterDisplay);
@@ -94,13 +106,18 @@ export default function ListBooking({ className }: ListBookingProps) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loadingForward && hasMore) {
+        if (
+          entries[0].isIntersecting &&
+          !loadingForward &&
+          hasMore &&
+          !bounded
+        ) {
           numOfBookingsForward = numOfBookingsForward + 7;
           setLoadingForward(true);
-          fetchData(filterState);
+          fetchData(filterState, state.searchText || undefined);
         }
       },
-      { threshold: 1.0 }
+      { rootMargin: "200px" }
     );
 
     if (forwardLoaderRef.current) {
@@ -112,8 +129,11 @@ export default function ListBooking({ className }: ListBookingProps) {
         observer.unobserve(forwardLoaderRef.current);
       }
     };
-  }, [loadingForward]);
+  }, [bounded, filterState, hasMore, loadingForward, state.searchText]);
   async function fetchData(filters: Filter, searchText?: string) {
+    const dateBounds = searchText
+      ? null
+      : bookingListDateBounds(filters, "checkIn");
     const cacheKey = bookingListCacheKey("bookings", {
       filters,
       searchText: searchText ?? "",
@@ -128,8 +148,9 @@ export default function ListBooking({ className }: ListBookingProps) {
         organizedByStartDate: organizedByStartDate(cachedBookings),
       }));
       setHasMore(
-        cachedBookings.length >= numOfBookingsBackward &&
-          cachedBookings.length >= numOfBookingsForward
+        !dateBounds &&
+          cachedBookings.length >=
+            numOfBookingsBackward + numOfBookingsForward
       );
       setLoading(false);
       setLoadingBackward(false);
@@ -166,24 +187,14 @@ export default function ListBooking({ className }: ListBookingProps) {
     } else {
       const centerOnCurrentDate =
         shouldCenterBookingListOnCurrentDate(filters);
-      if (filters.checkIn) {
-        console.log("Filtering by checkIn: ", filters.checkIn);
+      if (dateBounds) {
         oldBookingsData = oldBookingsData.eq(
           "check_in",
           convertDateToIndianDate({ date: new Date("2122-05-20") })
         );
         bookingsData = bookingsData
-          .gte(
-            "check_in",
-            convertDateToIndianDate({ date: new Date(filters.checkIn) })
-          )
-          .lte(
-            "check_in",
-            convertDateToIndianDate({
-              date: new Date(filters.checkIn),
-              addDays: 1,
-            })
-          );
+          .gte("check_in", dateBounds.start)
+          .lt("check_in", dateBounds.end);
       } else {
         const boundary = bookingListCurrentDateBoundary();
         bookingsData = bookingsData.gte("check_in", boundary);
@@ -221,8 +232,13 @@ export default function ListBooking({ className }: ListBookingProps) {
       .range(0, numOfBookingsBackward);
     let bookingsDataForward = bookingsData
       .eq("status", "confirmed")
-      .order("check_in", { ascending: true })
-      .range(0, numOfBookingsForward);
+      .order("check_in", { ascending: true });
+    if (!dateBounds) {
+      bookingsDataForward = bookingsDataForward.range(
+        0,
+        numOfBookingsForward
+      );
+    }
     console.log(
       requestId,
       " of ",
@@ -266,14 +282,10 @@ export default function ListBooking({ className }: ListBookingProps) {
             ?.scrollIntoView({ behavior: "smooth" });
         }
       }, 500);
-      if (
-        bookings.length < numOfBookingsBackward ||
-        bookings.length < numOfBookingsForward
-      ) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
+      setHasMore(
+        !dateBounds &&
+          (forwardResults.data?.length ?? 0) >= numOfBookingsForward + 1
+      );
       setLoading(false);
       setLoadingBackward(false);
       setLoadingForward(false);
@@ -326,6 +338,11 @@ export default function ListBooking({ className }: ListBookingProps) {
     if (Object.entries(query).length == 0) {
       fetchData({
         checkIn: null,
+        dateMode: null,
+        dateFrom: null,
+        dateTo: null,
+        dateMonth: null,
+        dateYear: null,
         properties: null,
         starred: null,
         paymentPending: null,
@@ -334,16 +351,36 @@ export default function ListBooking({ className }: ListBookingProps) {
     }
     console.log("query changed: ", query);
 
-    const { searchText, checkIn, properties, starred, paymentPending } = query;
+    const {
+      searchText,
+      checkIn,
+      dateMode,
+      dateFrom,
+      dateTo,
+      dateMonth,
+      dateYear,
+      properties,
+      starred,
+      paymentPending,
+    } = query;
+    const queryFilters: Filter = {
+      checkIn: checkIn ? checkIn.toString() : null,
+      dateMode:
+        dateMode === "range" || dateMode === "month" ? dateMode : null,
+      dateFrom: dateFrom ? dateFrom.toString() : null,
+      dateTo: dateTo ? dateTo.toString() : null,
+      dateMonth: dateMonth ? Number(dateMonth) : null,
+      dateYear: dateYear ? Number(dateYear) : null,
+      properties: properties ? parseProperties(properties.toString()) : null,
+      starred: !!starred,
+      paymentPending: !!paymentPending || null,
+    };
     if (searchText) {
       setState((prevState) => ({
         ...prevState,
         searchText: searchText ? searchText.toString() : null,
         filter: {
-          checkIn: checkIn || null,
-          properties: properties || null,
-          starred: starred || null,
-          paymentPending: paymentPending || null,
+          ...queryFilters,
         },
       }));
       eventEmitter.emit("searchTextChangedFromChild", {
@@ -353,19 +390,9 @@ export default function ListBooking({ className }: ListBookingProps) {
         },
       });
     }
-    setFilterState({
-      checkIn: checkIn ? checkIn.toString() : null,
-      properties: properties ? parseProperties(properties?.toString()) : null,
-      starred: !!starred,
-      paymentPending: !!paymentPending || null,
-    });
+    setFilterState(queryFilters);
     fetchData(
-      {
-        checkIn: checkIn ? checkIn.toString() : null,
-        properties: properties ? parseProperties(properties?.toString()) : null,
-        starred: !!starred,
-        paymentPending: !!paymentPending || null,
-      },
+      queryFilters,
       searchText ? searchText.toString() : undefined
     );
   }, [query]);
@@ -441,15 +468,22 @@ export default function ListBooking({ className }: ListBookingProps) {
     if (state.searchText) {
       pageQuery = { ...pageQuery, searchText: state.searchText };
     } else if (
-      filterState.checkIn ||
+      isBoundedBookingList(filterState, "checkIn") ||
       filterState.properties ||
       filterState.starred ||
       filterState.paymentPending
     ) {
       //empty oldBookingsData
 
-      if (filterState.checkIn) {
-        pageQuery = { ...pageQuery, checkIn: filterState.checkIn };
+      if (isBoundedBookingList(filterState, "checkIn")) {
+        pageQuery = {
+          ...pageQuery,
+          dateMode: filterState.dateMode,
+          dateFrom: filterState.dateFrom,
+          dateTo: filterState.dateTo,
+          dateMonth: filterState.dateMonth,
+          dateYear: filterState.dateYear,
+        };
       }
       if (filterState.properties) {
         pageQuery = {
@@ -496,16 +530,18 @@ export default function ListBooking({ className }: ListBookingProps) {
       />
       {/* Show filters if exists */}
       <div className="flex gap-3 mt-4 flex-wrap">
-        {filterState.checkIn && (
+        {bookingListDateFilterLabel(filterState) && (
           <div className="flex gap-4 items-center rounded-xl border-[1px] border-typo_dark-300 px-4 py-1">
             <label className="label_text ">
               {" "}
-              {format(new Date(filterState.checkIn), "iii LLL d")}
+              {bookingListDateFilterLabel(filterState)}
             </label>
             <span
               className=" material-symbols-outlined cursor-pointer "
               onClick={() => {
-                filterBlockRef.current.handleDateChange("checkIn", null);
+                setFilterState((current) =>
+                  clearBookingListDateFilter(current)
+                );
                 setTimeout(() => {
                   filterBlockRef.current.applyFilters();
                 }, 200);
@@ -579,7 +615,7 @@ export default function ListBooking({ className }: ListBookingProps) {
             </span>
           </div>
         )}
-        {(filterState.checkIn ||
+        {(isBoundedBookingList(filterState, "checkIn") ||
           filterState.properties?.length ||
           filterState.paymentPending ||
           filterState.starred) && (
@@ -587,6 +623,11 @@ export default function ListBooking({ className }: ListBookingProps) {
               onClick={() => {
                 setFilterState({
                   checkIn: null,
+                  dateMode: null,
+                  dateFrom: null,
+                  dateTo: null,
+                  dateMonth: null,
+                  dateYear: null,
                   properties: null,
                   starred: null,
                   paymentPending: null,
@@ -607,17 +648,17 @@ export default function ListBooking({ className }: ListBookingProps) {
 
       <div className="flex items-center justify-end gap-4">
         <ListViewToggle mode={viewMode} onChange={setViewMode} />
-        <LoadingButton
+        {!bounded && !state.searchText && <LoadingButton
           className=" border-[1px] border-selectedButton text-selectedButton my-4  py-3 px-4 w-64 rounded-lg h-12"
           loading={loadingBackward}
           onClick={() => {
             numOfBookingsBackward = numOfBookingsBackward + 7;
             setLoadingBackward(true);
-            fetchData(filterState);
+            fetchData(filterState, state.searchText || undefined);
           }}
         >
           Load older data
-        </LoadingButton>
+        </LoadingButton>}
         <button
           className="flex items-center gap-3 p-3 text-white bg-selectedButton rounded-lg text-sm h-12"
           onClick={() =>
@@ -713,25 +754,25 @@ export default function ListBooking({ className }: ListBookingProps) {
           </div>
         </React.Fragment>
       ))}
-      {/* <LoadingButton
+      {!bounded && hasMore ? <LoadingButton
         className=" border-[1px] border-selectedButton text-selectedButton my-4 w-full py-2 px-4 rounded-xl"
         loading={loadingForward}
         onClick={() => {
           numOfBookingsForward = numOfBookingsForward + 7;
           setLoadingForward(true);
-          fetchData(filterState);
+          fetchData(filterState, state.searchText || undefined);
         }}
       >
         Load More
-      </LoadingButton> */}
+      </LoadingButton> : null}
       {/* Filter modal */}
 
-      <div className="flex items-center justify-center">
+      {!bounded && hasMore ? <div className="flex items-center justify-center">
         <div
           ref={forwardLoaderRef}
-          className={`${loadingForward ? "loading" : ""}`}
+          className={`h-1 w-full ${loadingForward ? "loading" : ""}`}
         ></div>
-      </div>
+      </div> : null}
     </div>
   );
 }

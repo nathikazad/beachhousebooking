@@ -2,7 +2,6 @@
 import {
   BookingDB,
   Property,
-  convertDateToIndianDate,
   convertPropertiesForDb,
   printInIndianTime,
   numOfDays,
@@ -19,7 +18,6 @@ import React, {
   useRef,
 } from "react";
 import { useRouter } from "next/router";
-import format from "date-fns/format";
 import SearchInput from "./ui/SearchInput";
 import LoadingButton from "./ui/LoadingButton";
 import DateTimePickerInput from "./DateTimePickerInput/DateTimePickerInput";
@@ -35,6 +33,12 @@ import BookingFilter, { Filter } from "./BookingFilter";
 import ListViewToggle from "./ListViewToggle";
 import BookingListTable from "./BookingListTable";
 import { useListViewPreference } from "@/utils/useListViewPreference";
+import {
+  bookingListDateBounds,
+  bookingListDateFilterLabel,
+  clearBookingListDateFilter,
+  isBoundedBookingList,
+} from "@/utils/lib/bookingListFilters";
 
 export interface ListLogsState {
   searchText: string | null;
@@ -51,6 +55,7 @@ export default function ListLogs({ className }: ListLogsProps) {
   const query = router.query;
   const latestRequestRef = useRef<number>(0);
   const filterBlockRef = useRef<any>(null);
+  const forwardLoaderRef = useRef<HTMLDivElement | null>(null);
   const [viewMode, setViewMode] = useListViewPreference("logs");
 
   //Scroll smoothely to page section
@@ -64,6 +69,11 @@ export default function ListLogs({ className }: ListLogsProps) {
   const [filterState, setFilterState] = useState<Filter>({
     status: null,
     createdTime: null,
+    dateMode: null,
+    dateFrom: null,
+    dateTo: null,
+    dateMonth: null,
+    dateYear: null,
     properties: null,
     starred: null,
     paymentPending: null,
@@ -73,7 +83,13 @@ export default function ListLogs({ className }: ListLogsProps) {
   //Loading data
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingForward, setLoadingForward] = useState<boolean>(false);
+  const [hasMore, setHasMore] = useState(true);
+  const bounded =
+    !state.searchText && isBoundedBookingList(filterState, "createdTime");
   async function fetchData(filters: Filter, searchText?: string) {
+    const dateBounds = searchText
+      ? null
+      : bookingListDateBounds(filters, "createdTime");
     const cacheKey = bookingListCacheKey("logs", {
       filters,
       searchText: searchText ?? "",
@@ -87,6 +103,7 @@ export default function ListLogs({ className }: ListLogsProps) {
       }));
       setLoading(false);
       setLoadingForward(false);
+      setHasMore(!dateBounds && cachedBookings.length >= numOfBookings);
       setFilterModalOpened(false);
       setTimeout(() => {
         if (query.id) {
@@ -110,26 +127,17 @@ export default function ListLogs({ className }: ListLogsProps) {
         `client_name.ilike.%${searchText}%,client_phone_number.ilike.%${searchText}%`
       );
     } else if (
-      filters.createdTime ||
+      dateBounds ||
       filters.status ||
       (filters.properties?.length ?? 0) > 0 ||
       filters.starred ||
       filters.paymentPending ||
       filters.createdBy
     ) {
-      if (filters.createdTime) {
+      if (dateBounds) {
         bookingsData = bookingsData
-          .gte(
-            "created_at",
-            convertDateToIndianDate({ date: new Date(filters.createdTime) })
-          )
-          .lte(
-            "created_at",
-            convertDateToIndianDate({
-              date: new Date(filters.createdTime),
-              addDays: 1,
-            })
-          );
+          .gte("created_at", dateBounds.start)
+          .lt("created_at", dateBounds.end);
       }
       if (filters.status) {
         bookingsData = bookingsData.eq(
@@ -154,9 +162,10 @@ export default function ListLogs({ className }: ListLogsProps) {
       }
     }
 
-    bookingsData = bookingsData
-      .order("created_at", { ascending: false })
-      .range(0, numOfBookings);
+    bookingsData = bookingsData.order("created_at", { ascending: false });
+    if (!dateBounds) {
+      bookingsData = bookingsData.range(0, numOfBookings);
+    }
     let { data: result } = await bookingsData;
     // Check if this is the latest request
     if (latestRequestRef.current !== requestId) return;
@@ -165,6 +174,9 @@ export default function ListLogs({ className }: ListLogsProps) {
     result?.forEach((booking: any) => {
       bookings.unshift(bookingSummaryFromRow(booking));
     });
+    setHasMore(
+      !dateBounds && (result?.length ?? 0) >= numOfBookings + 1
+    );
     writeBookingListCache(cacheKey, bookings);
     setState((prevState) => ({
       ...prevState,
@@ -182,6 +194,23 @@ export default function ListLogs({ className }: ListLogsProps) {
     setLoadingForward(false);
     setFilterModalOpened(false);
   }
+
+  useEffect(() => {
+    if (bounded || !hasMore || loadingForward) return;
+    const loader = forwardLoaderRef.current;
+    if (!loader) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || loadingForward) return;
+        numOfBookings += 7;
+        setLoadingForward(true);
+        fetchData(filterState, state.searchText || undefined);
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(loader);
+    return () => observer.disconnect();
+  }, [bounded, filterState, hasMore, loadingForward, state.searchText]);
 
   //check if filterState is empty
   const checkEmptyFilterState = (): boolean => {
@@ -226,6 +255,11 @@ export default function ListLogs({ className }: ListLogsProps) {
       fetchData({
         status: null,
         createdTime: null,
+        dateMode: null,
+        dateFrom: null,
+        dateTo: null,
+        dateMonth: null,
+        dateYear: null,
         properties: null,
         starred: null,
         paymentPending: null,
@@ -237,44 +271,44 @@ export default function ListLogs({ className }: ListLogsProps) {
     const {
       searchText,
       createdTime,
+      dateMode,
+      dateFrom,
+      dateTo,
+      dateMonth,
+      dateYear,
       status,
       createdBy,
       properties,
       starred,
       paymentPending,
     } = query;
+    const queryFilters: Filter = {
+      createdTime: createdTime ? createdTime.toString() : null,
+      dateMode:
+        dateMode === "range" || dateMode === "month" ? dateMode : null,
+      dateFrom: dateFrom ? dateFrom.toString() : null,
+      dateTo: dateTo ? dateTo.toString() : null,
+      dateMonth: dateMonth ? Number(dateMonth) : null,
+      dateYear: dateYear ? Number(dateYear) : null,
+      createdBy: createdBy ? parseCreatedBy(createdBy.toString()) : null,
+      status: status ? parseStatus(status.toString()) : null,
+      properties: properties ? parseProperties(properties.toString()) : null,
+      starred: !!starred,
+      paymentPending: !!paymentPending || null,
+    };
     if (searchText) {
       setState((prevState) => ({
         ...prevState,
         searchText: searchText ? searchText.toString() : null,
         filter: {
-          createdTime: createdTime || null,
-          status: status || null,
-          createdBy: createdBy || null,
-          properties: properties || null,
-          starred: starred || null,
-          paymentPending: paymentPending || null,
+          ...queryFilters,
         },
       }));
     }
 
-    setFilterState({
-      createdTime: createdTime ? createdTime.toString() : null,
-      createdBy: createdBy ? parseCreatedBy(createdBy.toString()) : null,
-      status: status ? parseStatus(status.toString()) : null,
-      properties: properties ? parseProperties(properties?.toString()) : null,
-      starred: !!starred,
-      paymentPending: !!paymentPending || null,
-    });
+    setFilterState(queryFilters);
     fetchData(
-      {
-        createdTime: createdTime ? createdTime.toString() : null,
-        createdBy: createdBy ? parseCreatedBy(createdBy.toString()) : null,
-        status: status ? parseStatus(status.toString()) : null,
-        properties: properties ? parseProperties(properties?.toString()) : null,
-        starred: !!starred,
-        paymentPending: !!paymentPending || null,
-      },
+      queryFilters,
       searchText ? searchText.toString() : undefined
     );
   }, [query]);
@@ -352,15 +386,24 @@ export default function ListLogs({ className }: ListLogsProps) {
     if (state.searchText) {
       pageQuery = { ...pageQuery, searchText: state.searchText };
     } else if (
-      filterState.checkIn ||
+      isBoundedBookingList(filterState, "createdTime") ||
       filterState.properties ||
       filterState.starred ||
-      filterState.paymentPending
+      filterState.paymentPending ||
+      filterState.status ||
+      filterState.createdBy
     ) {
       //empty oldBookingsData
 
-      if (filterState.checkIn) {
-        pageQuery = { ...pageQuery, checkIn: filterState.checkIn };
+      if (isBoundedBookingList(filterState, "createdTime")) {
+        pageQuery = {
+          ...pageQuery,
+          dateMode: filterState.dateMode,
+          dateFrom: filterState.dateFrom,
+          dateTo: filterState.dateTo,
+          dateMonth: filterState.dateMonth,
+          dateYear: filterState.dateYear,
+        };
       }
       if (filterState.properties) {
         pageQuery = {
@@ -376,6 +419,12 @@ export default function ListLogs({ className }: ListLogsProps) {
           ...pageQuery,
           paymentPending: filterState.paymentPending,
         };
+      }
+      if (filterState.status) {
+        pageQuery = { ...pageQuery, status: filterState.status };
+      }
+      if (filterState.createdBy) {
+        pageQuery = { ...pageQuery, createdBy: filterState.createdBy };
       }
     } else {
       pageQuery = {};
@@ -415,35 +464,17 @@ export default function ListLogs({ className }: ListLogsProps) {
       />
       {/* Show filters if exists */}
       <div className="flex gap-3 mt-4 flex-wrap">
-        {filterState.checkIn && (
+        {bookingListDateFilterLabel(filterState) && (
           <div className="flex gap-4 items-center rounded-xl border-[1px] border-typo_dark-300 px-4 py-1">
             <label className="label_text ">
-              {" "}
-              {format(new Date(filterState.checkIn), "iii LLL d")}
+              {bookingListDateFilterLabel(filterState)}
             </label>
             <span
               className=" material-symbols-outlined cursor-pointer "
               onClick={() => {
-                filterBlockRef.current.handleDateChange("checkIn", null);
-                setTimeout(() => {
-                  filterBlockRef.current.applyFilters();
-                }, 200);
-              }}
-            >
-              close
-            </span>
-          </div>
-        )}
-        {filterState.createdTime && (
-          <div className="flex gap-4 items-center rounded-xl border-[1px] border-typo_dark-300 px-4 py-1">
-            <label className="label_text ">
-              {" "}
-              {format(new Date(filterState.createdTime), "iii LLL d")}
-            </label>
-            <span
-              className=" material-symbols-outlined cursor-pointer "
-              onClick={() => {
-                filterBlockRef.current.handleDateChange("createdTime", null);
+                setFilterState((current) =>
+                  clearBookingListDateFilter(current)
+                );
                 setTimeout(() => {
                   filterBlockRef.current.applyFilters();
                 }, 200);
@@ -552,20 +583,27 @@ export default function ListLogs({ className }: ListLogsProps) {
             </span>
           </div>
         )}
-        {(filterState.checkIn ||
+        {(isBoundedBookingList(filterState, "createdTime") ||
           filterState.properties ||
           filterState.paymentPending ||
           filterState.starred ||
           filterState.createdBy ||
-          filterState.createdTime ||
           filterState.status) && (
           <div
             onClick={() => {
               setFilterState({
                 checkIn: null,
+                createdTime: null,
+                dateMode: null,
+                dateFrom: null,
+                dateTo: null,
+                dateMonth: null,
+                dateYear: null,
                 properties: null,
                 starred: null,
                 paymentPending: null,
+                createdBy: null,
+                status: null,
               });
               setTimeout(() => {
                 filterBlockRef.current.applyFilters();
@@ -581,16 +619,6 @@ export default function ListLogs({ className }: ListLogsProps) {
         )}
       </div>
       <ListViewToggle mode={viewMode} onChange={setViewMode} />
-      <LoadingButton
-        className=" border-[1px] border-selectedButton text-selectedButton my-4 w-full py-2 px-4 rounded-xl"
-        onClick={() => {
-          numOfBookings = numOfBookings + 7;
-          fetchData(filterState);
-        }}
-        loading={loadingForward}
-      >
-        Load More
-      </LoadingButton>
 
       {viewMode === "table" ? (
         <BookingListTable
@@ -682,6 +710,20 @@ export default function ListLogs({ className }: ListLogsProps) {
           )}
         </React.Fragment>
       ))}
+      {!bounded && hasMore ? <LoadingButton
+        className=" border-[1px] border-selectedButton text-selectedButton my-4 w-full py-2 px-4 rounded-xl"
+        onClick={() => {
+          numOfBookings += 7;
+          setLoadingForward(true);
+          fetchData(filterState, state.searchText || undefined);
+        }}
+        loading={loadingForward}
+      >
+        Load More
+      </LoadingButton> : null}
+      {!bounded && hasMore ? (
+        <div ref={forwardLoaderRef} className="h-1 w-full" />
+      ) : null}
       {/* Filter modal */}
 
       <BookingFilter

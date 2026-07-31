@@ -1,19 +1,13 @@
 import React, { forwardRef, useImperativeHandle } from "react";
-import { Property } from "@/utils/lib/bookingType";
-import DateTimePickerInput from "./DateTimePickerInput/DateTimePickerInput";
 import Properties from "./Properties";
 import LoadingButton from "./ui/LoadingButton";
+import BookingDatePeriodFilter from "./BookingDatePeriodFilter";
+import {
+  Filter,
+  hasInvalidBookingListDateFilter,
+} from "@/utils/lib/bookingListFilters";
 
-
-export interface Filter {
-  checkIn?: string | null;
-  properties?: Property[] | null;
-  starred?: boolean | null;
-  paymentPending?: boolean | null;
-  status?: "Inquiry" | "Quotation" | "Confirmed" | null;
-  createdTime?: string | null;
-  createdBy?: "Indhu" | "Thejas" | "Yasmeen" | "Rafica" | null
-}
+export type { Filter } from "@/utils/lib/bookingListFilters";
 
 type BookingFilterProps = {
   isFiltersOpened: boolean;
@@ -59,12 +53,10 @@ const BookingFilter = forwardRef<any, BookingFilterProps>(({ filtersFor, filterS
       <div className='bg-white flex flex-col p-4 relative gap-4 z-20 max-h-[80vh] overflow-y-auto'>
         {/* filters */}
         <label className='subheading'>Filters</label>
-        {filtersFor == 'Logs' && (
-          <DateTimePickerInput label="Pick Date" name="createdTime" onChange={handleDateChange} value={filterState.createdTime} className='filterDatePicker' cleanable={true} showTime={false} />
-        )}
-        {filtersFor == 'Bookings' && (
-          <DateTimePickerInput label="Pick Date" name="checkIn" onChange={handleDateChange} value={filterState.checkIn} className='filterDatePicker' cleanable={true} showTime={false} />
-        )}
+        <BookingDatePeriodFilter
+          filterState={filterState}
+          setFilterState={setFilterState}
+        />
         {/* Referrals */}
 
         <Properties properties={filterState.properties ?? []} setFilterState={setFilterState} />
@@ -111,7 +103,8 @@ const BookingFilter = forwardRef<any, BookingFilterProps>(({ filtersFor, filterS
         )}
         {/* Apply filters */}
         <LoadingButton
-          className=" border-[1px] border-selectedButton text-selectedButton my-4 w-full py-2 px-4 rounded-xl"
+          className=" border-[1px] border-selectedButton text-selectedButton my-4 w-full py-2 px-4 rounded-xl disabled:opacity-50"
+          disabled={hasInvalidBookingListDateFilter(filterState)}
           loading={loading}
           onClick={(e) => {
             e.stopPropagation();

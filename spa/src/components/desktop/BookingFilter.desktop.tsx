@@ -1,19 +1,13 @@
 import React, { forwardRef, useImperativeHandle } from "react";
-import { Property } from "@/utils/lib/bookingType";
-import DateTimePickerInput from "../DateTimePickerInput/DateTimePickerInput";
 import Properties from "../Properties";
 import LoadingButton from "../ui/LoadingButton";
+import BookingDatePeriodFilter from "../BookingDatePeriodFilter";
+import {
+  Filter,
+  hasInvalidBookingListDateFilter,
+} from "@/utils/lib/bookingListFilters";
 
-
-export interface Filter {
-    checkIn?: string | null;
-    properties?: Property[] | null;
-    starred?: boolean | null;
-    paymentPending?: boolean | null;
-    status?: "Inquiry" | "Quotation" | "Confirmed" | null;
-    createdTime?: string | null;
-    createdBy?: "Indhu" | "Thejas" | "Yasmeen" | "Rafica" | null
-}
+export type { Filter } from "@/utils/lib/bookingListFilters";
 
 type BookingFilterProps = {
     isFiltersOpened: boolean;
@@ -65,28 +59,10 @@ const BookingFilter = forwardRef<any, BookingFilterProps>(({ filtersFor, filterS
           <div
             className={`${isFiltersOpened ? "flex flex-col gap-4" : "hidden"}`}
           >
-            {filtersFor == "Logs" && (
-              <DateTimePickerInput
-                label="Pick Date"
-                name="createdTime"
-                onChange={handleDateChange}
-                value={filterState.createdTime}
-                className="filterDatePicker"
-                cleanable={true}
-                showTime={false}
-              />
-            )}
-            {filtersFor == "Bookings" && (
-              <DateTimePickerInput
-                label="Pick Date"
-                name="checkIn"
-                onChange={handleDateChange}
-                value={filterState.checkIn}
-                className="filterDatePicker"
-                cleanable={true}
-                showTime={false}
-              />
-            )}
+            <BookingDatePeriodFilter
+              filterState={filterState}
+              setFilterState={setFilterState}
+            />
             {/* Referrals */}
 
             <Properties
@@ -228,7 +204,8 @@ const BookingFilter = forwardRef<any, BookingFilterProps>(({ filtersFor, filterS
             {/* Apply filters */}
             <div className="flex items-center justify-end">
               <LoadingButton
-                className=" border-[1px] border-selectedButton text-selectedButton my-4  py-2 px-4 rounded-xl w-64"
+                className=" border-[1px] border-selectedButton text-selectedButton my-4  py-2 px-4 rounded-xl w-64 disabled:opacity-50"
+                disabled={hasInvalidBookingListDateFilter(filterState)}
                 loading={loading}
                 onClick={(e) => {
                   e.stopPropagation();

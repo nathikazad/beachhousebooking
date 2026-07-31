@@ -22,6 +22,23 @@ describe("booking list date window", () => {
     ).toBe(false);
   });
 
+  it("does not center a bounded range or month around today", () => {
+    expect(
+      shouldCenterBookingListOnCurrentDate({
+        dateMode: "range",
+        dateFrom: "2026-08-01",
+        dateTo: "2026-08-31",
+      })
+    ).toBe(false);
+    expect(
+      shouldCenterBookingListOnCurrentDate({
+        dateMode: "month",
+        dateMonth: 8,
+        dateYear: 2026,
+      })
+    ).toBe(false);
+  });
+
   it("preserves all-date behavior for a text search", () => {
     expect(
       shouldCenterBookingListOnCurrentDate({ checkIn: null }, "Darsyanaa")
