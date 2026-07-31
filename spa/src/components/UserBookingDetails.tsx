@@ -11,6 +11,7 @@ import CreateEventComponent from './CreateEventForm';
 
 import Link from 'next/link';
 import { getLatestBookingHistory } from "@/utils/serverCommunicator";
+import { calculateGstPercentage } from "@/utils/lib/gst";
 
 enum Page {
     BookingPage,
@@ -446,7 +447,10 @@ export default function BookingDetailsComponent({
                         <strong className=" w-1/2">GST :</strong>{" "}
                         <span className="flex-1">
                           {formState.form.tax
-                            ? `₹ ${formState.form.tax.toLocaleString("en-IN")}`
+                            ? `(${calculateGstPercentage(
+                                formState.form.totalCost,
+                                formState.form.tax
+                              )}%) ₹ ${formState.form.tax.toLocaleString("en-IN")}`
                             : "₹ 0"}
                         </span>{" "}
                       </label>
