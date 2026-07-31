@@ -1,25 +1,23 @@
 import { BookingForm, Cost } from "./bookingType";
 
-export const DEFAULT_GST_REFERENCE_PERCENTAGE = 18;
-export const MAX_GST_REFERENCE_PERCENTAGE = 18;
-
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-export function calculateGstReferenceAmount(
+export function calculateGstPercentage(
   totalCost: number,
-  percentage: number
+  taxAmount: number
 ): number {
-  if (!Number.isFinite(totalCost) || !Number.isFinite(percentage)) {
+  if (
+    !Number.isFinite(totalCost) ||
+    !Number.isFinite(taxAmount) ||
+    totalCost <= 0 ||
+    taxAmount < 0
+  ) {
     return 0;
   }
 
-  const boundedPercentage = Math.min(
-    MAX_GST_REFERENCE_PERCENTAGE,
-    Math.max(0, percentage)
-  );
-  return roundMoney((Math.max(0, totalCost) * boundedPercentage) / 100);
+  return roundMoney((taxAmount / totalCost) * 100);
 }
 
 export function setSingleBookingTaxAmount(

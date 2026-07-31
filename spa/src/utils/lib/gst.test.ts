@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { BookingForm, Property, defaultForm } from "./bookingType";
 import {
-  calculateGstReferenceAmount,
+  calculateGstPercentage,
   normalizeBookingTax,
   setSingleBookingTaxAmount,
 } from "./gst";
 
 describe("GST helpers", () => {
-  it("calculates a rounded reference amount from 0–18 percent", () => {
-    expect(calculateGstReferenceAmount(50_000, 18)).toBe(9_000);
-    expect(calculateGstReferenceAmount(1_000, 7.25)).toBe(72.5);
-    expect(calculateGstReferenceAmount(50_000, 25)).toBe(9_000);
-    expect(calculateGstReferenceAmount(50_000, -1)).toBe(0);
+  it("calculates the GST percentage from the entered amount", () => {
+    expect(calculateGstPercentage(10_000, 900)).toBe(9);
+    expect(calculateGstPercentage(3_000, 1_000)).toBe(33.33);
+    expect(calculateGstPercentage(0, 900)).toBe(0);
+    expect(calculateGstPercentage(10_000, -1)).toBe(0);
   });
 
   it("keeps exactly one booking-level tax item", () => {
