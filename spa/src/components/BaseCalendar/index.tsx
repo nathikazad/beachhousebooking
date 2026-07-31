@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { BookingDB, CalendarCell, convertDateToIndianDate, convertIndianTimeToUTC } from '@/utils/lib/bookingType';
 import { title } from 'process';
 import { useRouter } from 'next/router';
+import { CalendarEventSegment, calendarEventSegment } from '@/utils/lib/calendarEventGeometry';
 
 interface BaseCalendarProps {
     onMonthChange: (date: Date) => void
@@ -20,13 +21,13 @@ type DayCellEvent = {
     endTime: string;
     title: string;
     bookingType: 'Stay' | 'Event';
-    positions: string[];
     color: string;
     order: number;
     bookingOrderNumber: number;
     numberOfGuests?: number;
     propertyName: string;
     booking: BookingDB;
+    segment: CalendarEventSegment;
 }
 const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList, loading }) => {
     const router = useRouter();
@@ -65,7 +66,7 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
 
                 const bookingDate = new Date(cell.startDateTime);
                 const endBookingDate = new Date(cell.endDateTime);
-                if (!isNaN(endBookingDate.getTime()) && !isNaN(bookingDate.getTime()) && isDateInRange(date, bookingDate, endBookingDate)) {
+                if (calendarEventSegment(date, bookingDate, endBookingDate)) {
 
                     index++;
                     maxRows < index ? maxRows++ : null;
@@ -90,48 +91,6 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
         return maxRows
     }
 
-    const isDateInRange = (date: Date, rangeStart: Date, rangeEnd: Date) => {
-        // Set time to 00:00:00 for date, rangeStart, and rangeEnd
-        const normalizeToMidnight = (d: Date) => new Date(d.setHours(0, 0, 0, 0));
-        const normalizeToLastHour = (d: Date) => new Date(d.setHours(23, 59, 0, 0));
-        const normalizeTo11Am = (d: Date) => new Date(d.setHours(14, 0, 59, 0));
-
-
-        const normalizedDate = normalizeToMidnight(new Date(date));
-        const normalizedStart = normalizeToMidnight(new Date(rangeStart));
-        const normalizedEnd = normalizeToLastHour(new Date(rangeEnd));
-        const normalizedDateTo11Am = normalizeTo11Am(new Date(date));
-
-
-        return normalizedDate >= normalizedStart && normalizedDate <= normalizedEnd && rangeEnd >= normalizedDateTo11Am;
-    };
-    const rangePositions = (date: Date, rangeStart: Date, rangeEnd: Date) => {
-        let positions = [];
-
-
-        const nextDay = (d: Date) => new Date(d.setDate(d.getDate() + 1))
-        const normalizeTo11Am = (d: Date) => new Date(nextDay(d).setHours(14, 0, 59, 0));
-        const normalizedNextDateTo11Am = normalizeTo11Am(new Date(date));
-        if (format(date, 'd-MM-yyyy') == format(rangeStart, 'd-MM-yyyy')) {
-            positions.unshift('start')
-        }
-
-        if (format(date, 'd-MM-yyyy') == format(rangeEnd, 'd-MM-yyyy') || (format(normalizedNextDateTo11Am, 'd-MM-yyyy') == format(rangeEnd, 'd-MM-yyyy') && normalizedNextDateTo11Am > rangeEnd)) {
-            positions.push('end')
-        }
-        if (format(date, 'd-MM-yyyy') !== format(rangeEnd, 'd-MM-yyyy') && format(date, 'd-MM-yyyy') !== format(rangeStart, 'd-MM-yyyy')) {
-
-            if (positions.includes('end')) {
-                positions.splice(positions.length - 1, 0, 'middle')
-            } else {
-                positions.push('middle')
-
-            }
-
-        }
-
-        return positions;
-    };
     function reOrderArray(arrayOfEvents: any, date: Date) {
 
         return arrayOfEvents
@@ -150,8 +109,8 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
             const bookingDay = bookingDate.getDate();
             const bookingEvent = cell.booking?.client?.name;
 
-            if (!isNaN(startDateToShow.getTime()) && !isNaN(endDateToShow.getTime()) && !isNaN(endBookingDate.getTime()) && !isNaN(bookingDate.getTime()) && isDateInRange(date, bookingDate, endBookingDate)) {
-                let positions = rangePositions(date, bookingDate, endBookingDate)
+            const segment = calendarEventSegment(date, bookingDate, endBookingDate);
+            if (!isNaN(startDateToShow.getTime()) && !isNaN(endDateToShow.getTime()) && segment) {
                 if (!tableOfOrders.current?.[cell.order]) { //this event dosn't start before this day
                   
                     let indexAlreadyUsed: string | undefined = undefined;
@@ -194,7 +153,7 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
                     }
                 }
                
-                return { bookingId: cell.booking.bookingId, startTime: format(bookingDate, 'd-MM-yyyy hh:mm aaa'), endTime: format(endBookingDate, 'd-MM-yyyy hh:mm aaa'), title: bookingEvent, bookingType: cell.booking.bookingType, positions, color: cell.color, order: tableOfOrders.current?.[cell.order], bookingOrderNumber: cell.order, numberOfGuests: cell.booking.numberOfGuests, propertyName: cell.propertyName, booking: cell.booking }
+                return { bookingId: cell.booking.bookingId, startTime: format(bookingDate, 'd-MM-yyyy hh:mm aaa'), endTime: format(endBookingDate, 'd-MM-yyyy hh:mm aaa'), title: bookingEvent, bookingType: cell.booking.bookingType, color: cell.color, order: tableOfOrders.current?.[cell.order], bookingOrderNumber: cell.order, numberOfGuests: cell.booking.numberOfGuests, propertyName: cell.propertyName, booking: cell.booking, segment }
 
 
             }
@@ -225,22 +184,18 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
             return (
                 <ul className={`calendar-todo-list grid  relative`} style={{ gridTemplateRows: `repeat(${dayMaxRow}, 1fr)` }}>
                     {displayList.map((event, index) => (
-                        <li key={event.title + '-' + index} className={`flex items-start my-[2px] relative w-full  min-w-0  `} style={{ gridRow: event.order }} >
-                            {event.positions.map((pos, i) => {
-                                switch (pos) {
-                                    case 'start':
-                                        return <div key={event.title + '-' + index + '-pos-' + i} id={event.title + '-' + index + '-pos-' + pos} style={{ backgroundColor: event.color }} className={`h-4 ${dayMaxRow > 3 ? 'tablet-down:h-2.5 xs-only:h-1.5' : 'mobile-down:h-3'} min-w-0 flex-1 rounded-l-lg flex items-center -mr-[6px]`}><span className={`text-white text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px] ${dayMaxRow > 3 ? 'xs-only:hidden' : ''}`}>{event.title}</span></div>
-                                        break;
-
-                                    case 'middle':
-                                        return <div key={event.title + '-' + index + '-pos-' + i} id={event.title + '-' + index + '-pos-' + pos} style={{ backgroundColor: event.color }} className={`h-4 ${dayMaxRow > 3 ? 'tablet-down:h-2.5 xs-only:h-1.5' : 'mobile-down:h-3'} min-w-0 flex-1 flex items-center -mx-[6px]`}><span className={`text-white text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px] ${dayMaxRow > 3 ? 'xs-only:hiddenhidden' : ''}`}></span></div>
-                                        break;
-
-                                    case 'end':
-                                        return <div key={event.title + '-' + index + '-pos-' + i} id={event.title + '-' + index + '-pos-' + pos} style={{ backgroundColor: event.color }} className={`h-4 ${dayMaxRow > 3 ? 'tablet-down:h-2.5 xs-only:h-1.5' : 'mobile-down:h-3'} min-w-0 flex-1 rounded-r-lg flex items-center -ml-[6px]`}><span className={`text-white text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px]${dayMaxRow > 3 ? 'xs-only:hiddenhidden' : ''}`}></span></div>
-                                        break;
-                                }
-                            })}
+                        <li key={event.title + '-' + index} className={`h-4 ${dayMaxRow > 3 ? 'tablet-down:h-2.5 xs-only:h-1.5' : 'mobile-down:h-3'} my-[2px] relative w-full min-w-0`} style={{ gridRow: event.order }} >
+                            <div
+                                id={event.title + '-' + index + '-segment'}
+                                style={{
+                                    backgroundColor: event.color,
+                                    left: event.segment.startsHere ? `${event.segment.startPercent}%` : '-6px',
+                                    right: event.segment.endsHere ? `${100 - event.segment.endPercent}%` : '-6px',
+                                }}
+                                className={`absolute inset-y-0 min-w-0 flex items-center ${event.segment.startsHere ? 'rounded-l-lg' : ''} ${event.segment.endsHere ? 'rounded-r-lg' : ''}`}
+                            >
+                                {event.segment.startsHere && <span className={`text-white text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px] ${dayMaxRow > 3 ? 'xs-only:hidden' : ''}`}>{event.title}</span>}
+                            </div>
                         </li>
                     ))}
 
