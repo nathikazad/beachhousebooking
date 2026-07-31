@@ -82,3 +82,19 @@ payments, deposits, or financial totals. Older JSON history remains unchanged.
 The backfill locks and rechecks each booking before replacement and skips
 version-2 bookings, so it cannot overwrite financial rows written by the new
 application while migration is running.
+
+## Background Google Calendar synchronization
+
+Booking create, update, and delete requests commit Supabase first and release
+their database connection. Vercel `waitUntil()` then synchronizes Google
+Calendar from the captured before/after booking snapshots without delaying the
+HTTP response.
+
+Calendar-visible changes use deterministic IDs for new Google events, direct
+patches for existing events, and bounded concurrency across properties. A
+Calendar failure is logged in Vercel but is not retried automatically; Supabase
+remains the authoritative booking database.
+
+For serverless database connection reuse, prefer a Supabase transaction-pooler
+connection string in `DATABASE_POOLER_URL`. `DATABASE_URL` remains the
+fallback.

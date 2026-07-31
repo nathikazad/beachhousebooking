@@ -280,14 +280,16 @@ function bookingReadResult(row: BookingReadRow): BookingReadResult {
 
 async function fetchBookingReadById(
     id: number,
-    includeHistory: boolean
+    includeHistory: boolean,
+    executor?: QueryExecutor
 ): Promise<BookingReadResult> {
     const rows = await query(
         `
         SELECT ${BOOKING_READ_COLUMNS}
         FROM public.bookings booking
         WHERE booking.id = $1`,
-        [id, includeHistory]
+        [id, includeHistory],
+        executor
     );
     if (rows.length === 0) {
         throw new Error("Booking not found");
@@ -315,7 +317,8 @@ async function fetchBookingReadByClientViewId(
 }
 
 export async function findBookingConflicts(
-    booking: BookingDB
+    booking: BookingDB,
+    executor?: QueryExecutor
 ): Promise<BookingConflict[]> {
     const occupancies: BookingOccupancyInput[] =
         normalizeBookingToOccupancies(booking);
@@ -328,7 +331,8 @@ export async function findBookingConflicts(
         `
         SELECT *
         FROM public.find_booking_conflicts($1::jsonb, $2::bigint)`,
-        [JSON.stringify(occupancies), booking.bookingId ?? null]
+        [JSON.stringify(occupancies), booking.bookingId ?? null],
+        executor
     );
 
     return rows.map(
@@ -412,7 +416,11 @@ export async function fetchUpcomingBookingConflicts(): Promise<
     );
 }
 
-export async function createBooking(booking: BookingDB, name: string): Promise<number> {
+export async function createBooking(
+    booking: BookingDB,
+    name: string,
+    executor?: QueryExecutor
+): Promise<number> {
     validateBookingFinancials(booking);
     const totals = calculateFinancialTotals(extractBookingFinancials(booking));
 
@@ -445,26 +453,31 @@ export async function createBooking(booking: BookingDB, name: string): Promise<n
         await replaceBookingOccupancies(client, bookingId, booking);
         await replaceBookingFinancials(client, bookingId, booking);
         return bookingId;
-    });
+    }, executor);
 }
 
-export async function updateBooking(booking: BookingDB[], id: number) {
-    const lastBooking = booking[booking.length - 1];
+export async function updateBooking(
+    lastBooking: BookingDB,
+    id: number,
+    executor?: QueryExecutor
+) {
     validateBookingFinancials(lastBooking, true);
     const totals = calculateFinancialTotals(
         extractBookingFinancials(lastBooking)
     );
-    const persistedHistory = booking.map((snapshot) =>
-        snapshot.encodingVersion >= 2
-            ? stripFinancialData(snapshot)
-            : snapshot
-    );
+    const persistedSnapshot =
+        lastBooking.encodingVersion >= 2
+            ? stripFinancialData(lastBooking)
+            : lastBooking;
 
     await withTransaction(async (client) => {
         await client.query(`
           UPDATE bookings
             SET
-              json = $2,
+              json = array_append(
+                coalesce(json, array[]::jsonb[]),
+                $2::jsonb
+              ),
               client_name = $3,
               client_phone_number = $4,
               referred_by = $5,
@@ -483,7 +496,7 @@ export async function updateBooking(booking: BookingDB[], id: number) {
               created_at = $18
             WHERE id = $1`,
             [id,
-                persistedHistory,
+                JSON.stringify(persistedSnapshot),
                 lastBooking.client.name,
                 lastBooking.client.phone,
                 lastBooking.refferral,
@@ -503,7 +516,7 @@ export async function updateBooking(booking: BookingDB[], id: number) {
             ]);
         await replaceBookingOccupancies(client, id, lastBooking);
         await replaceBookingFinancials(client, id, lastBooking);
-    });
+    }, executor);
 }
 
 export async function fetchBooking(id: number): Promise<BookingDB[]> {
@@ -511,9 +524,10 @@ export async function fetchBooking(id: number): Promise<BookingDB[]> {
 }
 
 export async function fetchLatestBooking(
-    id: number
+    id: number,
+    executor?: QueryExecutor
 ): Promise<BookingReadResult> {
-    return fetchBookingReadById(id, false);
+    return fetchBookingReadById(id, false, executor);
 }
 
 export async function fetchBookingByClientViewId(

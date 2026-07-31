@@ -3,14 +3,17 @@ import { BookingDB, Property } from "./bookingType";
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  transactionQuery: vi.fn(),
 }));
 
 vi.mock("./helper", () => ({
   query: mocks.query,
-  withTransaction: vi.fn(),
+  withTransaction: vi.fn(async (callback) =>
+    callback({ query: mocks.transactionQuery })
+  ),
 }));
 
-import { fetchBooking, fetchLatestBooking } from "./db";
+import { fetchBooking, fetchLatestBooking, updateBooking } from "./db";
 
 function booking(name: string): BookingDB {
   return {
@@ -79,6 +82,22 @@ function databaseRow(history: BookingDB[], historyCount = history.length) {
 describe("booking reads", () => {
   beforeEach(() => {
     mocks.query.mockReset();
+    mocks.transactionQuery.mockReset();
+    mocks.transactionQuery.mockResolvedValue({ rows: [] });
+  });
+
+  it("appends one snapshot instead of resending the complete history", async () => {
+    const latest = booking("Latest");
+
+    await updateBooking(latest, 42, undefined);
+
+    const updateCall = mocks.transactionQuery.mock.calls.find(([sql]) =>
+      String(sql).includes("UPDATE bookings")
+    );
+    expect(updateCall?.[0]).toContain("json = array_append");
+    expect(JSON.parse(updateCall?.[1][1])).toMatchObject({
+      client: { name: "Latest" },
+    });
   });
 
   it("loads and hydrates the latest booking with one query", async () => {

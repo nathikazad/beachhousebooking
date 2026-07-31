@@ -1,5 +1,9 @@
 import { BookingForm } from '@/utils/lib/bookingType';
-import { deleteBooking, mutateBookingState } from '@/utils/lib/booking';
+import {
+  CalendarSyncPlan,
+  deleteBooking,
+  mutateBookingState,
+} from '@/utils/lib/booking';
 import { BookingConflictError } from '@/utils/lib/occupancy';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { fetchUser, verifyAndGetPayload } from '@/utils/lib/auth';
@@ -9,6 +13,9 @@ import {
   fetchLatestBooking,
   fetchLatestBookingByClientViewId,
 } from "@/utils/lib/db";
+import { withDatabaseClient } from "@/utils/lib/helper";
+import { synchronizeCalendarInBackground } from "@/utils/lib/calendar/calendarBackgroundSync";
+import { waitUntil } from "@vercel/functions";
 
 export const config = {
   maxDuration: 59,
@@ -135,13 +142,33 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
 };
 
 const handlePost = async (req: NextApiRequest, res: NextApiResponse) => {
+  const startedAt = performance.now();
+  const timings: Array<{ name: string; duration: number }> = [];
+  const recordTiming = (name: string, duration: number) => {
+    timings.push({ name, duration });
+  };
+
   try {
+    const authStartedAt = performance.now();
     const payload = await verifyAndGetPayload(req);
+    recordTiming("auth", performance.now() - authStartedAt);
     const booking: BookingForm = JSON.parse(req.body);
-    const user = await fetchUser(payload.sub);
-    const bookingId = await mutateBookingState(booking, user);
-    res.status(200).json({ bookingId });
+    const mutation = await withDatabaseClient(async (client) => {
+      const userStartedAt = performance.now();
+      const user = await fetchUser(payload.sub, client);
+      recordTiming("user", performance.now() - userStartedAt);
+      return mutateBookingState(booking, user, {
+        executor: client,
+        recordTiming,
+      });
+    });
+    scheduleCalendarSync(mutation.calendarSync);
+    recordTiming("total", performance.now() - startedAt);
+    setServerTiming(res, timings);
+    res.status(200).json({ bookingId: mutation.bookingId });
   } catch (error) {
+    recordTiming("total", performance.now() - startedAt);
+    setServerTiming(res, timings);
     console.error('Error creating booking:', error);
     if (error instanceof BookingConflictError) {
       return res.status(409).json({
@@ -155,15 +182,61 @@ const handlePost = async (req: NextApiRequest, res: NextApiResponse) => {
 }
 
 const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
+  const startedAt = performance.now();
   console.log('Delete request');
   try {
     const payload = await verifyAndGetPayload(req);
     const { bookingId } = JSON.parse(req.body)
     console.log('Booking id:', bookingId);
-    await deleteBooking(bookingId);
+    const calendarSync = await withDatabaseClient(async (client) => {
+      await fetchUser(payload.sub, client);
+      return deleteBooking(bookingId, client);
+    });
+    scheduleCalendarSync(calendarSync);
+    res.setHeader(
+      "Server-Timing",
+      `total;dur=${(performance.now() - startedAt).toFixed(1)}`
+    );
     res.status(200).json({ message: "Booking deleted" });
   } catch (error) {
+    res.setHeader(
+      "Server-Timing",
+      `total;dur=${(performance.now() - startedAt).toFixed(1)}`
+    );
     console.error('Error deleting booking:', error);
     return res.status(500).json({ error: "Error deleting booking", message: (error as Error).message });
   }
+}
+
+function scheduleCalendarSync(plan: CalendarSyncPlan | undefined) {
+  if (!plan) return;
+
+  waitUntil(
+    Promise.resolve()
+      .then(() =>
+        synchronizeCalendarInBackground(
+          plan.bookingId,
+          plan.previousBooking,
+          plan.desiredBooking
+        )
+      )
+      .catch((error) => {
+        console.error("Background Google Calendar synchronization failed", {
+          bookingId: plan.bookingId,
+          error,
+        });
+      })
+  );
+}
+
+function setServerTiming(
+  res: NextApiResponse,
+  timings: Array<{ name: string; duration: number }>
+) {
+  res.setHeader(
+    "Server-Timing",
+    timings
+      .map(({ name, duration }) => `${name};dur=${duration.toFixed(1)}`)
+      .join(", ")
+  );
 }

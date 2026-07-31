@@ -1,10 +1,14 @@
 
 import { User } from "./auth";
 
-import { addToCalendar, deleteCalendarEvents } from "./calendar/calendarLogic";
 import { BookingDB, BookingForm, convertIndianTimeToUTC } from "./bookingType";
-import { createBooking, fetchBooking, findBookingConflicts, updateBooking } from "./db";
-import { query } from "./helper";
+import {
+  createBooking,
+  fetchLatestBooking,
+  findBookingConflicts,
+  updateBooking,
+} from "./db";
+import { QueryExecutor, withTransaction } from "./helper";
 import {
   BookingConflict,
   BookingConflictError,
@@ -12,18 +16,54 @@ import {
 } from "./occupancy";
 import { validateBookingFinancials } from "./financials";
 import { normalizeBookingTax } from "./gst";
+import {
+  needsCalendarSync,
+  removeMarkedEvents,
+} from "./calendar/calendarSyncModel";
+
+export interface CalendarSyncPlan {
+  bookingId: number;
+  previousBooking: BookingDB | null;
+  desiredBooking: BookingDB | null;
+}
+
+export interface BookingMutationResult {
+  bookingId: number;
+  calendarSync?: CalendarSyncPlan;
+}
+
+export interface BookingMutationOptions {
+  executor?: QueryExecutor;
+  recordTiming?: (name: string, duration: number) => void;
+}
+
+async function timed<T>(
+  name: string,
+  options: BookingMutationOptions,
+  operation: () => Promise<T>
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    return await operation();
+  } finally {
+    options.recordTiming?.(name, performance.now() - startedAt);
+  }
+}
 
 function capitalizeString(str: string): string {
   return str.replace(/\b\w/g, l => l.toUpperCase());
 }
 
 // return boolean and error if double booking is detected
-export async function checkForDoubleBooking(booking: BookingDB): Promise<{
+export async function checkForDoubleBooking(
+  booking: BookingDB,
+  executor?: QueryExecutor
+): Promise<{
   doubleBooking: boolean;
   conflicts: BookingConflict[];
   error?: string;
 }> {
-  const conflicts = await findBookingConflicts(booking);
+  const conflicts = await findBookingConflicts(booking, executor);
   return {
     doubleBooking: conflicts.length > 0,
     conflicts,
@@ -34,8 +74,12 @@ export async function checkForDoubleBooking(booking: BookingDB): Promise<{
   };
 }
 
-export async function mutateBookingState(booking: BookingForm, user: User): Promise<number> {
-  let newBooking: BookingDB = normalizeBookingTax({
+export async function mutateBookingState(
+  booking: BookingForm,
+  user: User,
+  options: BookingMutationOptions = {}
+): Promise<BookingMutationResult> {
+  let newBooking: BookingDB = removeMarkedEvents(normalizeBookingTax({
     ...booking,
     startDateTime: booking.startDateTime!,
     endDateTime: booking.endDateTime!,
@@ -64,7 +108,7 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
         dateTime: payment.dateTime || new Date().toISOString()
       }
     })
-  });
+  }));
   // TODO: add ids after booking id is generated, to reduce chance of collission
   for (let event of newBooking.events) {
     event.eventId = event.eventId || Math.floor(Math.random() * 1000000);
@@ -80,8 +124,19 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
   }
   validateBookingFinancials(newBooking, Boolean(newBooking.bookingId));
 
+  let previousBooking: BookingDB | null = null;
+  if (newBooking.bookingId) {
+    const latest = await timed("booking_read", options, () =>
+      fetchLatestBooking(newBooking.bookingId!, options.executor)
+    );
+    previousBooking = latest.history[latest.history.length - 1];
+    newBooking.createdBy = previousBooking.createdBy;
+  }
+
   if (newBooking.status == "Confirmed" || newBooking.status == "Preconfirmed") {
-    const { doubleBooking, conflicts } = await checkForDoubleBooking(newBooking);
+    const { doubleBooking, conflicts } = await timed("conflicts", options, () =>
+      checkForDoubleBooking(newBooking, options.executor)
+    );
     if (doubleBooking) {
       throw new BookingConflictError(conflicts);
     }
@@ -89,28 +144,65 @@ export async function mutateBookingState(booking: BookingForm, user: User): Prom
 
   if(newBooking.bookingId) {
     console.log("mutateBookingState modify booking")
-    await addToCalendar(newBooking);
-
     try {
-      await modifyExistingBooking(newBooking);
+      await timed("database_write", options, () =>
+        updateBooking(
+          newBooking,
+          newBooking.bookingId!,
+          options.executor
+        )
+      );
     } catch (error) {
-      return await throwFriendlyConstraintConflict(error, newBooking);
+      await throwFriendlyConstraintConflict(
+        error,
+        newBooking,
+        options.executor
+      );
     }
-    return newBooking.bookingId
+    return {
+      bookingId: newBooking.bookingId,
+      calendarSync: needsCalendarSync(previousBooking, newBooking)
+        ? {
+            bookingId: newBooking.bookingId,
+            previousBooking,
+            desiredBooking: newBooking,
+          }
+        : undefined,
+    };
   } else {
     console.log("mutateBookingState create booking")
-    await addToCalendar(newBooking);
     try {
-      return await createBooking(newBooking, user.displayName ?? user.id);
+      const bookingId = await timed("database_write", options, () =>
+        createBooking(
+          newBooking,
+          user.displayName ?? user.id,
+          options.executor
+        )
+      );
+      return {
+        bookingId,
+        calendarSync: needsCalendarSync(null, newBooking)
+          ? {
+              bookingId,
+              previousBooking: null,
+              desiredBooking: newBooking,
+            }
+          : undefined,
+      };
     } catch (error) {
-      return await throwFriendlyConstraintConflict(error, newBooking);
+      return await throwFriendlyConstraintConflict(
+        error,
+        newBooking,
+        options.executor
+      );
     }
   }
 }
 
 async function throwFriendlyConstraintConflict(
   error: unknown,
-  booking: BookingDB
+  booking: BookingDB,
+  executor?: QueryExecutor
 ): Promise<never> {
   if (
     typeof error === "object" &&
@@ -118,7 +210,7 @@ async function throwFriendlyConstraintConflict(
     "code" in error &&
     error.code === "23P01"
   ) {
-    const conflicts = await findBookingConflicts(booking);
+    const conflicts = await findBookingConflicts(booking, executor);
     if (conflicts.length > 0) {
       throw new BookingConflictError(conflicts);
     }
@@ -127,26 +219,18 @@ async function throwFriendlyConstraintConflict(
   throw error;
 }
 
-async function modifyExistingBooking(newBooking: BookingDB) {
-  if (!newBooking.bookingId) {
-    throw new Error("Booking ID is required");
-  }
-  let bookings = await fetchBooking(newBooking.bookingId!);
-  let oldBooking = bookings[bookings.length - 1];
-  newBooking.createdBy = oldBooking.createdBy;
-
-  bookings.push(newBooking);
-  await updateBooking(bookings, newBooking.bookingId!);
-}
-
-export async function deleteBooking(bookingId: number) {
-  // first fetch
-  let bookings = await query('SELECT * FROM bookings WHERE id = $1', [bookingId]);
-  if (bookings.length === 0) {
-    throw new Error("Booking not found");
-  }
-  let lastIndexOfJson = bookings[0].json.length - 1;
-  let booking = bookings[0].json[lastIndexOfJson] as BookingDB;
-  await deleteCalendarEvents(booking)
-  await query('DELETE FROM bookings WHERE id = $1', [bookingId]);
+export async function deleteBooking(
+  bookingId: number,
+  executor?: QueryExecutor
+): Promise<CalendarSyncPlan> {
+  return withTransaction(async (client) => {
+    const latest = await fetchLatestBooking(bookingId, client);
+    const booking = latest.history[latest.history.length - 1];
+    await client.query('DELETE FROM bookings WHERE id = $1', [bookingId]);
+    return {
+      bookingId,
+      previousBooking: booking,
+      desiredBooking: null,
+    };
+  }, executor);
 }

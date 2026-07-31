@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import { Client } from 'pg';
+import { Pool, PoolClient } from 'pg';
 
 export interface JwtPayload {
     email: string;
@@ -27,28 +27,6 @@ export const decodeJWT = (token: string): string => {
   return decodedValue;
 };
 
-export async function query(text: string, params?: any[]): Promise<any> {
-  // Create a new client instance
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL, // Your Supabase connection string
-  });
-
-  try {
-    // Connect to the database
-    await client.connect();
-
-    // Execute the query
-    const { rows } = await client.query(text, params);
-    return rows;
-  } catch (error) {
-    console.error('Error executing query:', error);
-    throw error;  // Rethrow or handle error appropriately
-  } finally {
-    // Always close the client, regardless of query success or failure
-    await client.end();
-  }
-}
-
 export interface QueryExecutor {
   query: (
     text: string,
@@ -56,15 +34,66 @@ export interface QueryExecutor {
   ) => Promise<{ rows: any[] }>;
 }
 
+declare global {
+  // eslint-disable-next-line no-var
+  var beachhouseDatabasePool: Pool | undefined;
+}
+
+function getDatabasePool(): Pool {
+  if (!global.beachhouseDatabasePool) {
+    global.beachhouseDatabasePool = new Pool({
+      connectionString:
+        process.env.DATABASE_POOLER_URL ?? process.env.DATABASE_URL,
+      max: Number(process.env.DATABASE_POOL_MAX ?? 3),
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+      allowExitOnIdle: true,
+    });
+  }
+
+  return global.beachhouseDatabasePool;
+}
+
+export async function query(
+  text: string,
+  params?: any[],
+  executor: QueryExecutor = getDatabasePool()
+): Promise<any[]> {
+  try {
+    const { rows } = await executor.query(text, params);
+    return rows;
+  } catch (error) {
+    console.error('Error executing query:', error);
+    throw error;
+  }
+}
+
+export async function withDatabaseClient<T>(
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await getDatabasePool().connect();
+  try {
+    return await callback(client);
+  } finally {
+    client.release();
+  }
+}
+
 export async function withTransaction<T>(
+  callback: (client: QueryExecutor) => Promise<T>,
+  executor?: QueryExecutor
+): Promise<T> {
+  if (executor) {
+    return runTransaction(executor, callback);
+  }
+
+  return withDatabaseClient((client) => runTransaction(client, callback));
+}
+
+async function runTransaction<T>(
+  client: QueryExecutor,
   callback: (client: QueryExecutor) => Promise<T>
 ): Promise<T> {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-  });
-
-  await client.connect();
-
   try {
     await client.query("BEGIN");
     const result = await callback(client);
@@ -73,8 +102,6 @@ export async function withTransaction<T>(
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    await client.end();
   }
 }
 

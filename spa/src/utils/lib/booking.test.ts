@@ -3,29 +3,24 @@ import { BookingForm, Property } from "./bookingType";
 import { BookingConflictError } from "./occupancy";
 
 const mocks = vi.hoisted(() => ({
-  addToCalendar: vi.fn(),
   createBooking: vi.fn(),
-  deleteCalendarEvents: vi.fn(),
-  fetchBooking: vi.fn(),
+  fetchLatestBooking: vi.fn(),
   findBookingConflicts: vi.fn(),
-  query: vi.fn(),
   updateBooking: vi.fn(),
-}));
-
-vi.mock("./calendar/calendarLogic", () => ({
-  addToCalendar: mocks.addToCalendar,
-  deleteCalendarEvents: mocks.deleteCalendarEvents,
+  transactionQuery: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
   createBooking: mocks.createBooking,
-  fetchBooking: mocks.fetchBooking,
+  fetchLatestBooking: mocks.fetchLatestBooking,
   findBookingConflicts: mocks.findBookingConflicts,
   updateBooking: mocks.updateBooking,
 }));
 
 vi.mock("./helper", () => ({
-  query: mocks.query,
+  withTransaction: vi.fn(async (callback) =>
+    callback({ query: mocks.transactionQuery })
+  ),
 }));
 
 import { deleteBooking, mutateBookingState } from "./booking";
@@ -63,11 +58,10 @@ function confirmedStay(): BookingForm {
 describe("mutateBookingState conflict validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.addToCalendar.mockImplementation(async (booking) => booking);
     mocks.createBooking.mockResolvedValue(42);
   });
 
-  it("stops before Calendar and persistence and returns every Supabase conflict", async () => {
+  it("stops before persistence and returns every Supabase conflict", async () => {
     mocks.findBookingConflicts.mockResolvedValue([
       {
         bookingId: 3046,
@@ -108,11 +102,10 @@ describe("mutateBookingState conflict validation", () => {
       ]),
     });
     await expect(promise).rejects.toBeInstanceOf(BookingConflictError);
-    expect(mocks.addToCalendar).not.toHaveBeenCalled();
     expect(mocks.createBooking).not.toHaveBeenCalled();
   });
 
-  it("continues to Calendar and persistence when Supabase reports no conflicts", async () => {
+  it("persists and returns a background Calendar plan when there are no conflicts", async () => {
     mocks.findBookingConflicts.mockResolvedValue([]);
 
     await expect(
@@ -120,13 +113,23 @@ describe("mutateBookingState conflict validation", () => {
         id: "user-1",
         displayName: "Tester",
       })
-    ).resolves.toBe(42);
+    ).resolves.toMatchObject({
+      bookingId: 42,
+      calendarSync: {
+        bookingId: 42,
+        previousBooking: null,
+        desiredBooking: expect.any(Object),
+      },
+    });
 
-    expect(mocks.addToCalendar).toHaveBeenCalledOnce();
-    expect(mocks.createBooking).toHaveBeenCalledOnce();
+    expect(mocks.createBooking).toHaveBeenCalledWith(
+      expect.any(Object),
+      "Tester",
+      undefined
+    );
   });
 
-  it("stops before Calendar when a new financial item has no property", async () => {
+  it("stops before persistence when a new financial item has no property", async () => {
     const booking = confirmedStay();
     booking.costs = [{ name: "Rent", amount: 1000 }];
 
@@ -137,50 +140,65 @@ describe("mutateBookingState conflict validation", () => {
       })
     ).rejects.toThrow("Select a property");
 
-    expect(mocks.addToCalendar).not.toHaveBeenCalled();
     expect(mocks.createBooking).not.toHaveBeenCalled();
+  });
+
+  it("does not return a Calendar plan when only non-calendar fields changed", async () => {
+    const previous = {
+      ...confirmedStay(),
+      bookingId: 42,
+      notes: "Before",
+      createdBy: { id: "creator", name: "Creator" },
+      updatedBy: { id: "creator", name: "Creator" },
+      createdDateTime: "2026-01-01T00:00:00.000Z",
+      updatedDateTime: "2026-01-01T00:00:00.000Z",
+      encodingVersion: 2 as const,
+      clientViewId: "view-42",
+    };
+    mocks.fetchLatestBooking.mockResolvedValue({
+      history: [previous],
+      historyCount: 1,
+    });
+    mocks.findBookingConflicts.mockResolvedValue([]);
+    mocks.updateBooking.mockResolvedValue(undefined);
+
+    const result = await mutateBookingState(
+      { ...previous, notes: "After" },
+      { id: "user-1", displayName: "Tester" }
+    );
+
+    expect(mocks.updateBooking).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: "After" }),
+      42,
+      undefined
+    );
+    expect(result).toMatchObject({ bookingId: 42 });
+    expect(result.calendarSync).toBeUndefined();
   });
 });
 
 describe("deleteBooking", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.deleteCalendarEvents.mockResolvedValue(undefined);
+    mocks.fetchLatestBooking.mockResolvedValue({
+      history: [{ ...confirmedStay(), bookingId: 2794 }],
+      historyCount: 1,
+    });
   });
 
-  it("does not resolve until the SQL deletion has completed", async () => {
-    let completeSqlDelete!: (rows: unknown[]) => void;
-    const pendingSqlDelete = new Promise<unknown[]>((resolve) => {
-      completeSqlDelete = resolve;
+  it("returns a Calendar deletion plan after SQL deletion", async () => {
+    mocks.transactionQuery.mockResolvedValue({ rows: [] });
+
+    const plan = await deleteBooking(2794);
+
+    expect(mocks.transactionQuery).toHaveBeenCalledWith(
+      "DELETE FROM bookings WHERE id = $1",
+      [2794]
+    );
+    expect(plan).toEqual({
+      bookingId: 2794,
+      previousBooking: expect.objectContaining({ bookingId: 2794 }),
+      desiredBooking: null,
     });
-
-    mocks.query
-      .mockResolvedValueOnce([
-        {
-          json: [{ ...confirmedStay(), bookingId: 2794 }],
-        },
-      ])
-      .mockReturnValueOnce(pendingSqlDelete);
-
-    let deletionResolved = false;
-    const deletion = deleteBooking(2794).then(() => {
-      deletionResolved = true;
-    });
-
-    await vi.waitFor(() => {
-      expect(mocks.query).toHaveBeenNthCalledWith(
-        2,
-        "DELETE FROM bookings WHERE id = $1",
-        [2794]
-      );
-    });
-    await Promise.resolve();
-
-    expect(deletionResolved).toBe(false);
-
-    completeSqlDelete([]);
-    await deletion;
-
-    expect(deletionResolved).toBe(true);
   });
 });
