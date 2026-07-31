@@ -35,6 +35,30 @@ export default function BookingTaxFields({
 
   return (
     <div className="flex flex-col gap-4">
+      <div
+        className="flex min-w-0 items-center gap-3"
+        aria-label="GST reference calculator"
+      >
+        <input
+          aria-label="GST reference percentage"
+          type="range"
+          min="0"
+          max={MAX_GST_REFERENCE_PERCENTAGE}
+          step="1"
+          value={referencePercentage}
+          onChange={(event) =>
+            setReferencePercentage(Number(event.target.value))
+          }
+          className="min-w-0 flex-1 accent-primaryShade"
+        />
+        <span className="shrink-0 text-sm font-medium">
+          {referencePercentage}%
+        </span>
+        <span className="shrink-0 text-sm font-medium">
+          {formatMoney(referenceAmount)}
+        </span>
+      </div>
+
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium">GST amount</span>
         <BaseInput
@@ -49,30 +73,6 @@ export default function BookingTaxFields({
           placeholder="GST amount"
         />
       </label>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm font-medium">
-          <span>GST reference percentage</span>
-          <span>{referencePercentage}%</span>
-        </div>
-        <input
-          aria-label="GST reference percentage"
-          type="range"
-          min="0"
-          max={MAX_GST_REFERENCE_PERCENTAGE}
-          step="1"
-          value={referencePercentage}
-          onChange={(event) =>
-            setReferencePercentage(Number(event.target.value))
-          }
-          className="w-full accent-primaryShade"
-        />
-      </div>
-
-      <div className="flex items-center justify-between rounded-lg bg-typo_light-100 px-4 py-3">
-        <span className="text-sm font-medium">Reference amount</span>
-        <span>{formatMoney(referenceAmount)}</span>
-      </div>
 
       <div className="title flex items-center justify-between">
         <span>Total after tax</span>
