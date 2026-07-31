@@ -1,13 +1,14 @@
-import { BookingDB, BookingForm } from "@/utils/lib/bookingType";
+import { BookingDB, BookingForm } from "./lib/bookingType";
 import {
   BookingHistorySnapshot,
   invalidateBookingHistoryCache,
   loadLatestBookingCached,
   loadBookingHistoryCached,
-} from "@/utils/lib/bookingHistoryCache";
-import { invalidateCheckInAuditCache } from "@/utils/lib/checkInAuditCache";
-import { invalidateDoubleBookingAuditCache } from "@/utils/lib/doubleBookingAuditCache";
-import { supabase } from "@/utils/supabase/client";
+} from "./lib/bookingHistoryCache";
+import { invalidateCheckInAuditCache } from "./lib/checkInAuditCache";
+import { invalidateDoubleBookingAuditCache } from "./lib/doubleBookingAuditCache";
+import { invalidateBookingListCache } from "./lib/bookingListCache";
+import { supabase } from "./supabase/client";
 
 export const monthConvertFromNumber: Record<number, string> = {
   1: "january",
@@ -49,6 +50,7 @@ export const createBooking = async (bookingForm: BookingForm) => {
     }
     invalidateCheckInAuditCache();
     invalidateDoubleBookingAuditCache();
+    invalidateBookingListCache();
     return bookingId;
 
   } catch (error) {
@@ -143,6 +145,7 @@ export const deleteBooking = async (bookingId: number) => {
       invalidateBookingHistoryCache(bookingId);
       invalidateCheckInAuditCache();
       invalidateDoubleBookingAuditCache();
+      invalidateBookingListCache();
     }
     console.log('Deleted id: ', bookingId);
 

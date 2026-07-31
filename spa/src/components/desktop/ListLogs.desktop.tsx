@@ -28,6 +28,14 @@ import Properties from "../Properties";
 import BookingFilterDesktop, { Filter } from "./BookingFilter.desktop";
 import { supabase } from "@/utils/supabase/client";
 import eventEmitter from "@/utils/eventEmitter";
+import {
+  bookingListCacheKey,
+  readBookingListCache,
+  writeBookingListCache,
+} from "@/utils/lib/bookingListCache";
+import ListViewToggle from "../ListViewToggle";
+import BookingListTable from "../BookingListTable";
+import { useListViewPreference } from "@/utils/useListViewPreference";
 
 export interface ListLogsState {
   searchText: string | null;
@@ -41,6 +49,7 @@ interface ListLogsProps {
 }
 export default function ListLogs({ className }: ListLogsProps) {
   const router = useRouter();
+  const [viewMode, setViewMode] = useListViewPreference("logs");
   const query = router.query;
   const latestRequestRef = useRef<number>(0);
   const filterBlockRef = useRef<any>(null);
@@ -100,6 +109,31 @@ export default function ListLogs({ className }: ListLogsProps) {
     };
   }, [loadingForward]);
   async function fetchData(filters: Filter, searchText?: string) {
+    const cacheKey = bookingListCacheKey("logs", {
+      filters,
+      searchText: searchText ?? "",
+      numOfBookings,
+    });
+    const cachedBookings = readBookingListCache(cacheKey);
+    if (cachedBookings) {
+      setState((prevState) => ({
+        ...prevState,
+        dbBookings: cachedBookings,
+      }));
+      setHasMore(cachedBookings.length >= numOfBookings);
+      setLoading(false);
+      setLoadingForward(false);
+      setFilterModalOpened(false);
+      setTimeout(() => {
+        if (query.id) {
+          document
+            .getElementById(query.id.toString() + "-id")
+            ?.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 0);
+      return;
+    }
+
     setLoading(true);
     setLoadingForward(true);
     setHasMore(false);
@@ -168,6 +202,7 @@ export default function ListLogs({ className }: ListLogsProps) {
     result?.forEach((booking: any) => {
       bookings.unshift(bookingSummaryFromRow(booking));
     });
+    writeBookingListCache(cacheKey, bookings);
     setState((prevState) => ({
       ...prevState,
       dbBookings: bookings,
@@ -588,6 +623,7 @@ export default function ListLogs({ className }: ListLogsProps) {
           )}
       </div>
       <div className="flex items-center justify-end gap-4">
+        <ListViewToggle mode={viewMode} onChange={setViewMode} />
         <button
           className="flex items-center gap-3 p-3 text-white bg-selectedButton rounded-lg text-sm h-12"
           onClick={() =>
@@ -603,7 +639,13 @@ export default function ListLogs({ className }: ListLogsProps) {
         </button>
       </div>
 
-      {dates().map((date) => (
+      {viewMode === "table" ? (
+        <BookingListTable
+          bookings={state.dbBookings}
+          list="logs"
+          onSelect={redirectToBookingId}
+        />
+      ) : dates().map((date) => (
         <React.Fragment key={date}>
           <p className="pl-1 mt-6 text-neutral-900 text-lg font-semibold leading-6 ">
             {convertDate(date)}

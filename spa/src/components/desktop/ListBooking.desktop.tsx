@@ -26,6 +26,18 @@ import LoadingButton from "../ui/LoadingButton";
 import { bookingSummaryFromRow } from "@/utils/lib/financials";
 import { useSearchParams } from "next/navigation";
 import eventEmitter from "@/utils/eventEmitter";
+import {
+  bookingListCacheKey,
+  readBookingListCache,
+  writeBookingListCache,
+} from "@/utils/lib/bookingListCache";
+import {
+  bookingListCurrentDateBoundary,
+  shouldCenterBookingListOnCurrentDate,
+} from "@/utils/lib/bookingListDateWindow";
+import ListViewToggle from "../ListViewToggle";
+import BookingListTable from "../BookingListTable";
+import { useListViewPreference } from "@/utils/useListViewPreference";
 
 // interface BookingProps {
 //   bookingsFromParent: BookingDB[];
@@ -44,6 +56,7 @@ let numOfBookingsForward = 7;
 let numOfBookingsBackward = 0;
 export default function ListBooking({ className }: ListBookingProps) {
   const router = useRouter();
+  const [viewMode, setViewMode] = useListViewPreference("bookings");
   const searchParams = useSearchParams();
   const query = router.query;
   const latestRequestRef = useRef<number>(0);
@@ -101,6 +114,37 @@ export default function ListBooking({ className }: ListBookingProps) {
     };
   }, [loadingForward]);
   async function fetchData(filters: Filter, searchText?: string) {
+    const cacheKey = bookingListCacheKey("bookings", {
+      filters,
+      searchText: searchText ?? "",
+      numOfBookingsBackward,
+      numOfBookingsForward,
+    });
+    const cachedBookings = readBookingListCache(cacheKey);
+    if (cachedBookings) {
+      setState((prevState) => ({
+        ...prevState,
+        dbBookings: cachedBookings,
+        organizedByStartDate: organizedByStartDate(cachedBookings),
+      }));
+      setHasMore(
+        cachedBookings.length >= numOfBookingsBackward &&
+          cachedBookings.length >= numOfBookingsForward
+      );
+      setLoading(false);
+      setLoadingBackward(false);
+      setLoadingForward(false);
+      setFilterModalOpened(false);
+      setTimeout(() => {
+        if (query.id) {
+          document
+            .getElementById(query.id.toString() + "-id")
+            ?.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 0);
+      return;
+    }
+
     const requestId = new Date().getTime();
     latestRequestRef.current = requestId;
     setLoading(true);
@@ -119,19 +163,15 @@ export default function ListBooking({ className }: ListBookingProps) {
         "check_in",
         convertDateToIndianDate({ date: new Date("2122-05-20") })
       );
-    } else if (
-      filters.checkIn ||
-      filters.properties ||
-      filters.starred ||
-      filters.paymentPending
-    ) {
-      //empty oldBookingsData
-      oldBookingsData = oldBookingsData.eq(
-        "check_in",
-        convertDateToIndianDate({ date: new Date("2122-05-20") })
-      );
+    } else {
+      const centerOnCurrentDate =
+        shouldCenterBookingListOnCurrentDate(filters);
       if (filters.checkIn) {
         console.log("Filtering by checkIn: ", filters.checkIn);
+        oldBookingsData = oldBookingsData.eq(
+          "check_in",
+          convertDateToIndianDate({ date: new Date("2122-05-20") })
+        );
         bookingsData = bookingsData
           .gte(
             "check_in",
@@ -144,28 +184,35 @@ export default function ListBooking({ className }: ListBookingProps) {
               addDays: 1,
             })
           );
+      } else {
+        const boundary = bookingListCurrentDateBoundary();
+        bookingsData = bookingsData.gte("check_in", boundary);
+        oldBookingsData = oldBookingsData.lt("check_in", boundary);
       }
       if (filters.properties) {
         bookingsData = bookingsData.contains(
           "properties",
           convertPropertiesForDb(filters.properties)
         );
+        if (centerOnCurrentDate) {
+          oldBookingsData = oldBookingsData.contains(
+            "properties",
+            convertPropertiesForDb(filters.properties)
+          );
+        }
       }
       if (filters.starred) {
         bookingsData = bookingsData.eq("starred", filters.starred);
+        if (centerOnCurrentDate) {
+          oldBookingsData = oldBookingsData.eq("starred", filters.starred);
+        }
       }
       if (filters.paymentPending) {
         bookingsData = bookingsData.gt("outstanding", 0);
+        if (centerOnCurrentDate) {
+          oldBookingsData = oldBookingsData.gt("outstanding", 0);
+        }
       }
-    } else {
-      bookingsData = bookingsData.gte(
-        "check_in",
-        new Date(new Date().setDate(new Date().getDate() - 2)).toISOString()
-      );
-      oldBookingsData = oldBookingsData.lte(
-        "check_in",
-        new Date(new Date().setDate(new Date().getDate() - 2)).toISOString()
-      );
     }
 
     let bookingsDataBackward = oldBookingsData
@@ -202,6 +249,7 @@ export default function ListBooking({ className }: ListBookingProps) {
       for (const booking of forwardResults.data ?? []) {
         bookings.push(bookingSummaryFromRow(booking));
       }
+      writeBookingListCache(cacheKey, bookings);
 
       console.log("Combined Bookings:", bookings);
 
@@ -558,6 +606,7 @@ export default function ListBooking({ className }: ListBookingProps) {
       </div>
 
       <div className="flex items-center justify-end gap-4">
+        <ListViewToggle mode={viewMode} onChange={setViewMode} />
         <LoadingButton
           className=" border-[1px] border-selectedButton text-selectedButton my-4  py-3 px-4 w-64 rounded-lg h-12"
           loading={loadingBackward}
@@ -583,7 +632,13 @@ export default function ListBooking({ className }: ListBookingProps) {
           <span>Create booking</span>
         </button>
       </div>
-      {dates().map((date) => (
+      {viewMode === "table" ? (
+        <BookingListTable
+          bookings={state.dbBookings}
+          list="bookings"
+          onSelect={redirectToBookingId}
+        />
+      ) : dates().map((date) => (
         <React.Fragment key={date}>
           <p className="pl-1 mt-6 text-neutral-900 text-lg font-semibold leading-6 ">
             {convertDate(date)}
