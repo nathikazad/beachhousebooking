@@ -7,8 +7,16 @@
     ],
     "routes": [
       {
+        "src": "/protected/booking/(?<id>[0-9]+)/edit",
+        "dest": "spa/protected/booking/[id]/edit?id=$id"
+      },
+      {
+        "src": "/protected/booking/(?<id>[0-9]+)",
+        "dest": "spa/protected/booking/[id]?id=$id"
+      },
+      {
         "src": "/(.*)",
-        "dest": "spa"
+        "dest": "spa/$1"
       }
     ]
   }
