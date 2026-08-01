@@ -9,6 +9,12 @@ import {
   clearBookingHistoryCache,
 } from "./lib/bookingHistoryCache";
 import { BookingDB, BookingForm } from "./lib/bookingType";
+import {
+  calendarViewCacheKey,
+  clearCalendarViewCache,
+  readCalendarViewCache,
+  refreshCalendarViewCache,
+} from "./lib/calendarViewCache";
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -33,6 +39,7 @@ describe("booking list cache invalidation", () => {
   beforeEach(() => {
     invalidateBookingListCache();
     clearBookingHistoryCache();
+    clearCalendarViewCache();
     mocks.getSession.mockResolvedValue({
       data: { session: { access_token: "token" } },
     });
@@ -57,8 +64,12 @@ describe("booking list cache invalidation", () => {
     expect(readBookingListCache(cacheKey)).toHaveLength(1);
   });
 
-  it("clears list rows after a successful create or update", async () => {
+  it("clears list rows but retains calendar data after a successful create or update", async () => {
+    const calendarKey = calendarViewCacheKey(new Date(2026, 7, 1));
     writeBookingListCache(cacheKey, [{} as BookingDB]);
+    await refreshCalendarViewCache(calendarKey, async () => [
+      { bookingId: 41 } as BookingDB,
+    ]);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -70,5 +81,8 @@ describe("booking list cache invalidation", () => {
     await createBooking({} as BookingForm);
 
     expect(readBookingListCache(cacheKey)).toBeNull();
+    expect(readCalendarViewCache(calendarKey)).toEqual([
+      { bookingId: 41 } as BookingDB,
+    ]);
   });
 });

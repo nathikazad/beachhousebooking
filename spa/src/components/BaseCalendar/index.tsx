@@ -10,7 +10,7 @@ import { CalendarEventSegment, calendarEventSegment } from '@/utils/lib/calendar
 interface BaseCalendarProps {
     onMonthChange: (date: Date) => void
     bookingsList: CalendarCell[]
-    loading?: Boolean
+    loading?: boolean
 }
 type Order = {
     order: number;
@@ -174,7 +174,6 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
         dayMaxRow = maxRowsByGrid //dayMaxRow != 0 ? maxRowsByGrid : 1
         //console.log(dayMaxRow, calendarRows.current, calendarDays.current, format(date, 'MMM_dd'));
 
-        if (loading) return <ul className={`calendar-todo-list grid  relative`} ><li className='flex items-center justify-center'><div className="loader-spinner "></div></li></ul>
         const list = getTodoList(date);
 
         const displayList = list
@@ -212,7 +211,10 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
     }
     return (
         <div style={{ width: selectedDate && showEvents && listOfAllEvents.current[selectedDate.getTime()]?.length ? 'calc(100% - 24rem)' : '100%' }}>
-            <Calendar compact className='bg-blueShade rounded-t-xl' renderCell={renderCell} cellClassName={date => `bg-blueShade/10  [&_.rs-calendar-table-cell-content]:!h-auto  `} onChange={date => { setSelectedDate(date); setShowEvents(true) }} onMonthChange={(date) => { onMonthChange(date); setMonthDate(date); setSelectedDate(null); setShowEvents(false) }} />
+            <div className="relative">
+                <Calendar compact className='bg-blueShade rounded-t-xl' renderCell={renderCell} cellClassName={date => `bg-blueShade/10  [&_.rs-calendar-table-cell-content]:!h-auto  `} onChange={date => { setSelectedDate(date); setShowEvents(true) }} onMonthChange={(date) => { onMonthChange(date); setMonthDate(date); setSelectedDate(null); setShowEvents(false) }} />
+                {loading && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70"><div className="loader-spinner" aria-label="Loading calendar"></div></div>}
+            </div>
             {
                 selectedDate ? <div className={`event-details bg-white py-5 min-h-60 px-5 pb-5 fixed w-96 mobile-down:w-full top-0 h-full z-[999] max-h-full overflow-y-auto side-nav-shadow transition-all ${showEvents && listOfAllEvents.current[selectedDate.getTime()]?.length ? ' right-0' : '-right-full'}`}>
                     <div className='flex items-center justify-end'>

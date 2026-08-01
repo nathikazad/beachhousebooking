@@ -113,6 +113,9 @@ export function getEventsFromBooking(bookings:BookingDB[],filteredByProperty:Pro
   for (let i = 0; i < events.length; i++) {
     const event: Event = events[i];
 if(filteredByProperty!='all'){
+  if (!event.properties.includes(filteredByProperty)) {
+    continue;
+  }
   let calendarCell:CalendarCell={
     booking:{...booking},
     startDateTime:event.startDateTime,

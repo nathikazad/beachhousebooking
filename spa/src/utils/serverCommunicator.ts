@@ -8,6 +8,7 @@ import {
 import { invalidateCheckInAuditCache } from "./lib/checkInAuditCache";
 import { invalidateDoubleBookingAuditCache } from "./lib/doubleBookingAuditCache";
 import { invalidateBookingListCache } from "./lib/bookingListCache";
+import { markCalendarViewCacheStale } from "./lib/calendarViewCache";
 import { supabase } from "./supabase/client";
 
 export const monthConvertFromNumber: Record<number, string> = {
@@ -51,6 +52,7 @@ export const createBooking = async (bookingForm: BookingForm) => {
     invalidateCheckInAuditCache();
     invalidateDoubleBookingAuditCache();
     invalidateBookingListCache();
+    markCalendarViewCacheStale();
     return bookingId;
 
   } catch (error) {
@@ -146,6 +148,7 @@ export const deleteBooking = async (bookingId: number) => {
       invalidateCheckInAuditCache();
       invalidateDoubleBookingAuditCache();
       invalidateBookingListCache();
+      markCalendarViewCacheStale();
     }
     console.log('Deleted id: ', bookingId);
 
