@@ -6,6 +6,12 @@ export interface BookingHistorySnapshot {
   historyCount: number;
 }
 type LatestBookingLoader = () => Promise<BookingHistorySnapshot>;
+export type BookingCacheSource =
+  | "history-cache"
+  | "latest-cache"
+  | "inflight"
+  | "network";
+type BookingCacheSourceObserver = (source: BookingCacheSource) => void;
 
 const bookingHistoryCache = new Map<number, BookingDB[]>();
 const bookingHistoryRequests = new Map<number, Promise<BookingDB[]>>();
@@ -55,10 +61,12 @@ export function invalidateBookingHistoryCache(bookingId: number): void {
 
 export async function loadLatestBookingCached(
   bookingId: number,
-  loader: LatestBookingLoader
+  loader: LatestBookingLoader,
+  observeSource?: BookingCacheSourceObserver,
 ): Promise<BookingHistorySnapshot> {
   const fullHistory = readBookingHistoryCache(bookingId);
   if (fullHistory) {
+    observeSource?.("history-cache");
     return {
       history: [fullHistory[fullHistory.length - 1]],
       historyCount: fullHistory.length,
@@ -66,13 +74,18 @@ export async function loadLatestBookingCached(
   }
 
   const cached = latestBookingCache.get(bookingId);
-  if (cached) return cloneSnapshot(cached);
+  if (cached) {
+    observeSource?.("latest-cache");
+    return cloneSnapshot(cached);
+  }
 
   const existingRequest = latestBookingRequests.get(bookingId);
   if (existingRequest) {
+    observeSource?.("inflight");
     return existingRequest.then(cloneSnapshot);
   }
 
+  observeSource?.("network");
   const request = loader()
     .then((snapshot) => {
       latestBookingCache.set(bookingId, cloneSnapshot(snapshot));

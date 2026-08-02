@@ -28,6 +28,25 @@ configuration should be maintained here.
 
 The hosted project currently has no deployed Edge Functions.
 
+## Browser booking reads and RLS
+
+`20260802010000_secure_direct_booking_reads.sql` makes booking reads available
+directly to signed-in Supabase users without granting browser write access. It
+enables RLS on `bookings`, permits authenticated reads of booking and financial
+records, denies anonymous access, and exposes only the latest booking snapshot
+through the security-invoker `booking_current_details` view. Historical
+versions are loaded on demand through the similarly protected
+`booking_history_details` view.
+
+Create, update, and delete operations continue through the Vercel API. The
+legacy `cmd_exec` table is denied to API roles, and reporting functions are
+executable only by authenticated users and the service role.
+
+Browser-measured booking read timings are sent after rendering to the
+authenticated `/api/client-performance` endpoint and emitted as structured
+`booking_read_performance` entries in Vercel runtime logs. No metrics table is
+created.
+
 ## Booking occupancy rollout
 
 The `20260730010000_booking_occupancies.sql` migration creates normalized

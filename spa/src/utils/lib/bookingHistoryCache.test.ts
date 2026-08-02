@@ -93,6 +93,21 @@ describe("booking history cache", () => {
     expect(loader).toHaveBeenCalledTimes(1);
   });
 
+  it("reports whether a latest booking came from the network or cache", async () => {
+    const firstSource = vi.fn();
+    const secondSource = vi.fn();
+
+    await loadLatestBookingCached(
+      42,
+      async () => ({ history: [booking("Latest")], historyCount: 1 }),
+      firstSource,
+    );
+    await loadLatestBookingCached(42, vi.fn(), secondSource);
+
+    expect(firstSource).toHaveBeenCalledWith("network");
+    expect(secondSource).toHaveBeenCalledWith("latest-cache");
+  });
+
   it("serves the latest version from a complete cached history", async () => {
     await loadBookingHistoryCached(42, async () => [
       booking("Original"),
