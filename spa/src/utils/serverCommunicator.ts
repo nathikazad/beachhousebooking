@@ -180,7 +180,7 @@ async function fetchDirectBookingRead(
   };
 }
 
-export interface BookingReadPerformance {
+interface BookingReadPerformance {
   bookingId: number;
   cacheSource: BookingCacheSource;
   totalMs: number;
@@ -189,23 +189,6 @@ export interface BookingReadPerformance {
   payloadBytes: number;
   success: boolean;
   errorCode?: string;
-}
-
-export function bookingReadPerformancePath(
-  metric: BookingReadPerformance,
-  browserSessionId: string,
-): string {
-  const observableMetric = [
-    `b${metric.bookingId}`,
-    `c${metric.cacheSource}`,
-    `t${metric.totalMs.toFixed(1)}`,
-    `s${metric.supabaseMs.toFixed(1)}`,
-    `h${metric.hydrateMs.toFixed(1)}`,
-    `p${Math.round(metric.payloadBytes)}`,
-    metric.success ? "ok" : "error",
-    `x${browserSessionId.slice(0, 8)}`,
-  ].join("-");
-  return `/api/client-performance/${observableMetric}`;
 }
 
 const recentBookingReadMetrics = new Map<string, number>();
@@ -234,27 +217,23 @@ function scheduleBookingReadPerformanceLog(
 async function logBookingReadPerformance(
   metric: BookingReadPerformance
 ): Promise<void> {
+  // The RPC deliberately returns a tagged Postgres exception so Supabase keeps
+  // the browser measurement in its runtime logs without adding a data table.
+  // supabase-js resolves RPC errors in the result object, so this stays silent.
   try {
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
-    if (!token) return;
-
-    const browserSessionId = getBrowserSessionId();
-    await fetch(bookingReadPerformancePath(metric, browserSessionId), {
-      method: "POST",
-      keepalive: true,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event: "booking_read_performance",
-        browserSessionId,
-        ...metric,
-      }),
+    await supabase.rpc("log_booking_read_performance", {
+      p_booking_id: metric.bookingId,
+      p_browser_session_id: getBrowserSessionId(),
+      p_cache_source: metric.cacheSource,
+      p_total_ms: metric.totalMs,
+      p_supabase_ms: metric.supabaseMs,
+      p_hydrate_ms: metric.hydrateMs,
+      p_payload_bytes: metric.payloadBytes,
+      p_success: metric.success,
+      p_error_code: metric.errorCode ?? null,
     });
-  } catch (error) {
-    console.warn("Unable to record booking read performance", error);
+  } catch {
+    // Telemetry must never affect the booking view.
   }
 }
 
