@@ -1,136 +1,108 @@
-import LoadingButton from '@/components/ui/LoadingButton';
-import { supabase } from '@/utils/supabase/client';
-import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import LoadingButton from "@/components/ui/LoadingButton";
+import { toIndianAuthPhone } from "@/utils/lib/indianPhone";
+import { supabase } from "@/utils/supabase/client";
+import { useRouter } from "next/router";
+import { FormEvent, useState } from "react";
 
 const Login = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [reSendWaitingSeconds, setReSendWaitingSeconds] = useState(0);
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (reSendWaitingSeconds > 0 && reSendWaitingSeconds <= 30) {
-      interval = setInterval(() => {
-        setReSendWaitingSeconds((prev) => prev - 1);
-      }, 1000);
-    }
-
-    if (reSendWaitingSeconds === 0) {
-      clearInterval(interval!);
-
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [reSendWaitingSeconds]);
-
   const router = useRouter();
-  const usersList = [{ name: 'Indhu', phone: '+917010155010' }, { name: 'Thejas', phone: '+918838892623' }, { name: 'Yasmeen', phone: '+916383282186' }, { name: 'Nishtar', phone: '+916374542005' }, { name: 'Yassine', phone: '+21692243333' }, { name: 'Rafica', phone: '+919092665230' }, { name: 'Nathik', phone: '+12098628445' }]
-  const sendOTP = async () => {
-    setLoading(true);
+
+  const login = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setErrorMessage(null);
-    let phoneToSend: string = phone;
 
-    if (!phoneToSend.startsWith("+")) {
-      phoneToSend = "+91" + phoneToSend;
+    const authPhone = toIndianAuthPhone(phone);
+    if (!authPhone) {
+      setErrorMessage("Enter a valid 10-digit Indian mobile number");
+      return;
     }
-    phoneToSend = phoneToSend.replace(/\s/g, "");
-
-    console.log(phoneToSend);
-    const { data, error } = await supabase.auth.signInWithOtp({
-      phone: phoneToSend,
-    });
-
-    if (error) {
-      console.log(error);
-      setErrorMessage("Could not authenticate user");
-    } else {
-      console.log(data);
-      setReSendWaitingSeconds(30); // Start the resend countdown
+    if (!password) {
+      setErrorMessage("Enter your password");
+      return;
     }
-    setLoading(false);
-  };
 
-  const confirmOTP = async () => {
-    setLoading(true)
-    let phoneToSend: string = phone;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        phone: authPhone,
+        password,
+      });
 
-    if (!phoneToSend.startsWith("+")) {
-      phoneToSend = "+91" + phoneToSend;
+      if (error) {
+        setErrorMessage("Incorrect phone number or password");
+        return;
+      }
+
+      await router.push("/protected/logs");
+    } catch {
+      setErrorMessage("Incorrect phone number or password");
+    } finally {
+      setLoading(false);
     }
-    phoneToSend = phoneToSend.replace(/\s/g, "");
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.verifyOtp({
-      phone: phoneToSend,
-      token: otp,
-      type: 'sms',
-    })
-
-    // console.log(session)
-
-    if (error) {
-      setErrorMessage("Could not authenticate user");
-    } else {
-      console.log(session);
-    }
-    setLoading(false)
-    return router.push("/protected/logs");
   };
 
   return (
     <div className="flex-1 flex flex-col w-full px-8 sm:max-w-md justify-center gap-2">
-      <form className="animate-in flex-1 flex flex-col w-full justify-center gap-2 text-foreground">
-        <label className="text-md label-text font-semibold" htmlFor="email">
+      <form
+        className="animate-in flex-1 flex flex-col w-full justify-center gap-2 text-foreground"
+        onSubmit={login}
+      >
+        <label className="text-md label-text font-semibold" htmlFor="phone">
           Phone Number
         </label>
-        <select name="properties" id="properties" className="my-2 w-full h-10 border-[1px] border-typo_dark-100 rounded-sm px-3" value={phone} onChange={(e) => setPhone(e.target.value)}>
-          <option value="">Select a user</option>
-          {usersList.map(usr => {
-            return <option key={usr.phone} value={usr.phone}>{`${usr.name} (${usr.phone})`}</option>
-          })}
-        </select>
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          placeholder="10-digit mobile number"
+          maxLength={10}
+          value={phone}
+          onChange={(event) =>
+            setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))
+          }
+          className="rounded-md px-4 py-2 bg-inherit border"
+        />
 
-        <LoadingButton
-          loading={loading}
-          disabled={!!reSendWaitingSeconds}
-          onClick={(e) => {
-            e.preventDefault();
-            sendOTP();
-          }}
-          className="bg-green-700 rounded-md px-4 py-2 text-white "
+        <label
+          className="text-md label-text font-semibold mt-2"
+          htmlFor="password"
         >
-          Send OTP
-        </LoadingButton>
-        <span className={`${reSendWaitingSeconds ? 'visible' : 'invisible'} text-xs `}>Resend again OTP in <strong className='text-green-700 !font-semibold'>{reSendWaitingSeconds} seconds</strong></span>
-        <label className="text-md label-text font-semibold" htmlFor="password">
-          OTP
+          Password
         </label>
         <input
-          className={`${otp && otp.length < 7 ? 'border-green-700' : ''}${otp && otp.length >= 7 ? 'border-error' : ''} rounded-md px-4 py-2 bg-inherit border mb-6`}
-          name="otp"
-          placeholder="••••••••"
-          type='number'
-          onChange={(e) => setOtp(e.target.value)}
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="rounded-md px-4 py-2 bg-inherit border mb-4"
         />
+
         <LoadingButton
+          type="submit"
           loading={loading}
-          onClick={(e) => {
-            e.preventDefault();
-            confirmOTP();
-          }}
-          className="border border-foreground/20 rounded-md px-4 py-2 text-foreground"
+          className="bg-green-700 rounded-md px-4 py-2 text-white"
         >
           Login
         </LoadingButton>
-        <span className={`${errorMessage ? 'visible' : 'invisible'} text-xs text-error`}>{errorMessage}</span>
+        <span
+          role="alert"
+          className={`${errorMessage ? "visible" : "invisible"} text-xs text-error`}
+        >
+          {errorMessage ?? "Authentication error"}
+        </span>
       </form>
     </div>
   );
 };
+
 Login.useNoLayout = true;
 export default Login;
