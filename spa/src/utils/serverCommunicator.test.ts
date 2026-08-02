@@ -37,10 +37,32 @@ vi.mock("./supabase/client", () => ({
 }));
 
 import {
+  bookingReadPerformancePath,
   createBooking,
   getBookingHistory,
   getLatestBookingHistory,
 } from "./serverCommunicator";
+
+describe("booking read performance logs", () => {
+  it("puts non-sensitive timing fields in the retained Vercel request path", () => {
+    expect(
+      bookingReadPerformancePath(
+        {
+          bookingId: 3126,
+          cacheSource: "network",
+          totalMs: 524.64,
+          supabaseMs: 511.27,
+          hydrateMs: 1.36,
+          payloadBytes: 1489.4,
+          success: true,
+        },
+        "123e4567-e89b-12d3-a456-426614174000",
+      ),
+    ).toBe(
+      "/api/client-performance/b3126-cnetwork-t524.6-s511.3-h1.4-p1489-ok-x123e4567",
+    );
+  });
+});
 
 describe("booking list cache invalidation", () => {
   const cacheKey = bookingListCacheKey("bookings", {});

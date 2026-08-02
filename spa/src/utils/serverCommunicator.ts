@@ -180,7 +180,7 @@ async function fetchDirectBookingRead(
   };
 }
 
-interface BookingReadPerformance {
+export interface BookingReadPerformance {
   bookingId: number;
   cacheSource: BookingCacheSource;
   totalMs: number;
@@ -189,6 +189,23 @@ interface BookingReadPerformance {
   payloadBytes: number;
   success: boolean;
   errorCode?: string;
+}
+
+export function bookingReadPerformancePath(
+  metric: BookingReadPerformance,
+  browserSessionId: string,
+): string {
+  const observableMetric = [
+    `b${metric.bookingId}`,
+    `c${metric.cacheSource}`,
+    `t${metric.totalMs.toFixed(1)}`,
+    `s${metric.supabaseMs.toFixed(1)}`,
+    `h${metric.hydrateMs.toFixed(1)}`,
+    `p${Math.round(metric.payloadBytes)}`,
+    metric.success ? "ok" : "error",
+    `x${browserSessionId.slice(0, 8)}`,
+  ].join("-");
+  return `/api/client-performance/${observableMetric}`;
 }
 
 const recentBookingReadMetrics = new Map<string, number>();
@@ -222,7 +239,8 @@ async function logBookingReadPerformance(
     const token = session.data.session?.access_token;
     if (!token) return;
 
-    await fetch("/api/client-performance", {
+    const browserSessionId = getBrowserSessionId();
+    await fetch(bookingReadPerformancePath(metric, browserSessionId), {
       method: "POST",
       keepalive: true,
       headers: {
@@ -231,7 +249,7 @@ async function logBookingReadPerformance(
       },
       body: JSON.stringify({
         event: "booking_read_performance",
-        browserSessionId: getBrowserSessionId(),
+        browserSessionId,
         ...metric,
       }),
     });
