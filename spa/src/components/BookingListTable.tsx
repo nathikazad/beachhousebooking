@@ -50,11 +50,28 @@ const propertyAbbreviations: Record<Property, string> = {
 export function abbreviateTableProperties(
   properties: Property[] | undefined
 ): string {
-  return properties?.map((property) => propertyAbbreviations[property]).join(", ") || "—";
+  return (
+    properties?.map((property) => propertyAbbreviations[property]).join(", ") ||
+    "—"
+  );
+}
+
+export function abbreviateBookingStatus(status: BookingDB["status"]): string {
+  const abbreviations: Record<BookingDB["status"], string> = {
+    Inquiry: "I",
+    Quotation: "Q",
+    Preconfirmed: "P",
+    Confirmed: "C",
+  };
+  return abbreviations[status] ?? status?.charAt(0).toUpperCase() ?? "—";
 }
 
 function amount(value: number | undefined): string {
   return `Rs ${(value ?? 0).toLocaleString("en-IN")}`;
+}
+
+function compactAmount(value: number | undefined): string {
+  return `₹${(value ?? 0).toLocaleString("en-IN")}`;
 }
 
 export function sortBookingsForTable(
@@ -82,16 +99,20 @@ export default function BookingListTable({
 
   return (
     <div className="my-4 w-full overflow-x-auto rounded-xl border border-gray-200">
-      <table className="w-full table-fixed text-left text-sm">
+      <table className="w-full table-auto text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="w-20 px-3 py-3 desktop-up:w-24">
+            <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
               {isLog ? "Created" : "Check-in"}
             </th>
-            <th className="w-24 px-3 py-3 desktop-up:w-36">Name</th>
-            <th className="w-24 px-3 py-3 desktop-up:w-32">Property</th>
-            <th className="hidden w-24 px-3 py-3 mobile-up:table-cell">
-              Status
+            <th className="w-full px-2 py-3 desktop-up:px-3">Name</th>
+            <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
+              <span className="desktop-up:hidden" aria-label="Property">P</span>
+              <span className="hidden desktop-up:inline">Property</span>
+            </th>
+            <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
+              <span className="desktop-up:hidden" aria-label="Status">S</span>
+              <span className="hidden desktop-up:inline">Status</span>
             </th>
             {isLog ? (
               <>
@@ -104,8 +125,9 @@ export default function BookingListTable({
                 <th className="hidden w-24 px-3 py-3 xl:table-cell">
                   Payment
                 </th>
-                <th className="hidden w-28 px-3 py-3 desktop-up:table-cell">
-                  Outstanding
+                <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
+                  <span className="desktop-up:hidden">Due</span>
+                  <span className="hidden desktop-up:inline">Outstanding</span>
                 </th>
                 <th className="hidden w-20 px-3 py-3 2xl:table-cell">
                   Guests
@@ -122,8 +144,9 @@ export default function BookingListTable({
                 <th className="hidden w-20 px-3 py-3 laptop-up:table-cell">
                   Type
                 </th>
-                <th className="hidden w-28 px-3 py-3 xl:table-cell">
-                  Outstanding
+                <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
+                  <span className="desktop-up:hidden">Due</span>
+                  <span className="hidden desktop-up:inline">Outstanding</span>
                 </th>
                 <th className="hidden w-20 px-3 py-3 desktop-up:table-cell">
                   Guests
@@ -154,7 +177,7 @@ export default function BookingListTable({
               }}
               className="cursor-pointer bg-white hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
             >
-              <td className="truncate px-3 py-3 text-slate-600">
+              <td className="whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3">
                 <span className="desktop-up:hidden">
                   {formatCompactTableDate(
                     isLog ? booking.createdDateTime : booking.startDateTime
@@ -167,7 +190,7 @@ export default function BookingListTable({
                 </span>
               </td>
               <td
-                className="max-w-0 px-3 py-3 font-medium text-neutral-900"
+                className="max-w-0 px-2 py-3 font-medium text-neutral-900 desktop-up:px-3"
                 title={booking.client.name}
               >
                 <div className="flex min-w-0 items-center">
@@ -184,7 +207,10 @@ export default function BookingListTable({
                   ) : null}
                 </div>
               </td>
-              <td className="truncate px-3 py-3 text-slate-600">
+              <td
+                className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                title={booking.properties?.join(", ") || undefined}
+              >
                 <span className="desktop-up:hidden">
                   {abbreviateTableProperties(booking.properties)}
                 </span>
@@ -192,8 +218,14 @@ export default function BookingListTable({
                   {booking.properties?.join(", ") || "—"}
                 </span>
               </td>
-              <td className="hidden truncate px-3 py-3 text-slate-600 mobile-up:table-cell">
-                {booking.status}
+              <td
+                className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                title={booking.status}
+              >
+                <span className="desktop-up:hidden">
+                  {abbreviateBookingStatus(booking.status)}
+                </span>
+                <span className="hidden desktop-up:inline">{booking.status}</span>
               </td>
               {isLog ? (
                 <>
@@ -206,8 +238,13 @@ export default function BookingListTable({
                   <td className="hidden px-3 py-3 xl:table-cell">
                     {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
                   </td>
-                  <td className="hidden px-3 py-3 text-slate-600 desktop-up:table-cell">
-                    {amount(booking.outstanding)}
+                  <td className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3">
+                    <span className="desktop-up:hidden">
+                      {compactAmount(booking.outstanding)}
+                    </span>
+                    <span className="hidden desktop-up:inline">
+                      {amount(booking.outstanding)}
+                    </span>
                   </td>
                   <td className="hidden px-3 py-3 text-slate-600 2xl:table-cell">
                     {booking.numberOfGuests}
@@ -224,8 +261,13 @@ export default function BookingListTable({
                   <td className="hidden px-3 py-3 text-slate-600 laptop-up:table-cell">
                     {booking.bookingType}
                   </td>
-                  <td className="hidden px-3 py-3 text-slate-600 xl:table-cell">
-                    {amount(booking.outstanding)}
+                  <td className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3">
+                    <span className="desktop-up:hidden">
+                      {compactAmount(booking.outstanding)}
+                    </span>
+                    <span className="hidden desktop-up:inline">
+                      {amount(booking.outstanding)}
+                    </span>
                   </td>
                   <td className="hidden px-3 py-3 text-slate-600 desktop-up:table-cell">
                     {booking.numberOfGuests}

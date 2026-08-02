@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BookingDB } from "../utils/lib/bookingType";
 import { Property } from "../utils/lib/bookingType";
 import {
+  abbreviateBookingStatus,
   abbreviateTableProperties,
   firstTableName,
   formatCompactTableDate,
@@ -63,5 +64,14 @@ describe("compact booking table values", () => {
         Property.VillaArmati,
       ])
     ).toBe("BH, GH, C, ML, LC, VA");
+  });
+
+  it.each([
+    ["Inquiry", "I"],
+    ["Quotation", "Q"],
+    ["Preconfirmed", "P"],
+    ["Confirmed", "C"],
+  ] as const)("abbreviates status %s as %s", (status, expected) => {
+    expect(abbreviateBookingStatus(status)).toBe(expected);
   });
 });
