@@ -1,5 +1,5 @@
 import format from "date-fns/format";
-import { BookingDB, numOfDays } from "../utils/lib/bookingType";
+import { BookingDB, numOfDays, Property } from "../utils/lib/bookingType";
 
 interface BookingListTableProps {
   bookings: BookingDB[];
@@ -11,6 +11,31 @@ function formatDate(value: string | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : format(date, "dd MMM yy");
+}
+
+export function formatCompactTableDate(value: string | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : format(date, "dd MMM");
+}
+
+export function firstTableName(value: string | undefined): string {
+  return value?.trim().split(/\s+/)[0] || "—";
+}
+
+const propertyAbbreviations: Record<Property, string> = {
+  [Property.Bluehouse]: "BH",
+  [Property.Glasshouse]: "GH",
+  [Property.Castle]: "C",
+  [Property.MeadowLane]: "ML",
+  [Property.LeChalet]: "LC",
+  [Property.VillaArmati]: "VA",
+};
+
+export function abbreviateTableProperties(
+  properties: Property[] | undefined
+): string {
+  return properties?.map((property) => propertyAbbreviations[property]).join(", ") || "—";
 }
 
 function amount(value: number | undefined): string {
@@ -45,11 +70,11 @@ export default function BookingListTable({
       <table className="w-full table-fixed text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="w-24 px-3 py-3">
+            <th className="w-20 px-3 py-3 desktop-up:w-24">
               {isLog ? "Created" : "Check-in"}
             </th>
-            <th className="w-28 px-3 py-3 tablet-up:w-36">Name</th>
-            <th className="w-32 px-3 py-3">Property</th>
+            <th className="w-24 px-3 py-3 desktop-up:w-36">Name</th>
+            <th className="w-24 px-3 py-3 desktop-up:w-32">Property</th>
             <th className="hidden w-24 px-3 py-3 mobile-up:table-cell">
               Status
             </th>
@@ -115,16 +140,28 @@ export default function BookingListTable({
               className="cursor-pointer bg-white hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
             >
               <td className="truncate px-3 py-3 text-slate-600">
-                {formatDate(
-                  isLog ? booking.createdDateTime : booking.startDateTime
-                )}
+                <span className="desktop-up:hidden">
+                  {formatCompactTableDate(
+                    isLog ? booking.createdDateTime : booking.startDateTime
+                  )}
+                </span>
+                <span className="hidden desktop-up:inline">
+                  {formatDate(
+                    isLog ? booking.createdDateTime : booking.startDateTime
+                  )}
+                </span>
               </td>
               <td
                 className="max-w-0 px-3 py-3 font-medium text-neutral-900"
                 title={booking.client.name}
               >
                 <div className="flex min-w-0 items-center">
-                  <span className="min-w-0 truncate">{booking.client.name}</span>
+                  <span className="min-w-0 truncate desktop-up:hidden">
+                    {firstTableName(booking.client.name)}
+                  </span>
+                  <span className="hidden min-w-0 truncate desktop-up:inline">
+                    {booking.client.name}
+                  </span>
                   {booking.starred ? (
                     <span className="material-symbols-filled ml-1 shrink-0 text-base">
                       star_rate
@@ -133,7 +170,12 @@ export default function BookingListTable({
                 </div>
               </td>
               <td className="truncate px-3 py-3 text-slate-600">
-                {booking.properties?.join(", ") || "—"}
+                <span className="desktop-up:hidden">
+                  {abbreviateTableProperties(booking.properties)}
+                </span>
+                <span className="hidden desktop-up:inline">
+                  {booking.properties?.join(", ") || "—"}
+                </span>
               </td>
               <td className="hidden truncate px-3 py-3 text-slate-600 mobile-up:table-cell">
                 {booking.status}

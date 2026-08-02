@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { BookingDB } from "../utils/lib/bookingType";
-import { sortBookingsForTable } from "./BookingListTable";
+import { Property } from "../utils/lib/bookingType";
+import {
+  abbreviateTableProperties,
+  firstTableName,
+  formatCompactTableDate,
+  sortBookingsForTable,
+} from "./BookingListTable";
 
 function booking(
   bookingId: number,
@@ -26,5 +32,28 @@ describe("sortBookingsForTable", () => {
     expect(
       sortBookingsForTable(bookings, "logs").map((item) => item.bookingId)
     ).toEqual([1, 2]);
+  });
+});
+
+describe("compact booking table values", () => {
+  it("drops the year from compact dates", () => {
+    expect(formatCompactTableDate("2026-08-02T00:00:00Z")).toBe("02 Aug");
+  });
+
+  it("uses only the first client name", () => {
+    expect(firstTableName("  Darsyanaa Guest Name ")).toBe("Darsyanaa");
+  });
+
+  it("abbreviates every property", () => {
+    expect(
+      abbreviateTableProperties([
+        Property.Bluehouse,
+        Property.Glasshouse,
+        Property.Castle,
+        Property.MeadowLane,
+        Property.LeChalet,
+        Property.VillaArmati,
+      ])
+    ).toBe("BH, GH, C, ML, LC, VA");
   });
 });
