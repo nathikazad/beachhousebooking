@@ -20,7 +20,22 @@ export function formatCompactTableDate(value: string | undefined): string {
 }
 
 export function firstTableName(value: string | undefined): string {
-  return value?.trim().split(/\s+/)[0] || "—";
+  const words = value?.trim().split(/\s+/).filter(Boolean) ?? [];
+  const titles = new Set([
+    "mr",
+    "mrs",
+    "ms",
+    "miss",
+    "dr",
+    "prof",
+    "shri",
+    "sri",
+    "smt",
+  ]);
+  const firstNonTitle = words.find(
+    (word) => !titles.has(word.replace(/\.+$/, "").toLowerCase())
+  );
+  return firstNonTitle || words[0] || "—";
 }
 
 const propertyAbbreviations: Record<Property, string> = {

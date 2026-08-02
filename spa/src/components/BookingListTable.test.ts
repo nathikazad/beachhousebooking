@@ -44,6 +44,14 @@ describe("compact booking table values", () => {
     expect(firstTableName("  Darsyanaa Guest Name ")).toBe("Darsyanaa");
   });
 
+  it.each([
+    ["Mr Nishtar Guest", "Nishtar"],
+    ["Dr. Rafica Guest", "Rafica"],
+    ["Mrs. Dr. Darsyanaa Guest", "Darsyanaa"],
+  ])("skips titles in %s", (name, expected) => {
+    expect(firstTableName(name)).toBe(expected);
+  });
+
   it("abbreviates every property", () => {
     expect(
       abbreviateTableProperties([
