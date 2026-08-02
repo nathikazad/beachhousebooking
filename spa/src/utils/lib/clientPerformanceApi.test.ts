@@ -30,7 +30,7 @@ describe("client performance logging endpoint", () => {
   });
 
   it("writes a structured authenticated booking metric to runtime logs", () => {
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const res = response();
 
     handler(
@@ -52,8 +52,8 @@ describe("client performance logging endpoint", () => {
     );
 
     expect(res.status).toHaveBeenCalledWith(204);
-    expect(info).toHaveBeenCalledOnce();
-    expect(JSON.parse(info.mock.calls[0][0])).toMatchObject({
+    expect(log).toHaveBeenCalledOnce();
+    expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({
       event: "booking_read_performance",
       bookingId: 3126,
       userId: "user-1",
@@ -63,7 +63,7 @@ describe("client performance logging endpoint", () => {
   });
 
   it("rejects malformed metrics without logging them", () => {
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const res = response();
 
     handler(
@@ -72,6 +72,6 @@ describe("client performance logging endpoint", () => {
     );
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(info).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
   });
 });

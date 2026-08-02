@@ -55,7 +55,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       deployment: process.env.VERCEL_GIT_COMMIT_SHA,
     };
 
-    console.info(JSON.stringify(metric));
+    console.log(JSON.stringify(metric));
     return res.status(204).end();
   } catch {
     return res.status(401).json({ error: "UNAUTHORIZED" });
