@@ -70,8 +70,23 @@ function amount(value: number | undefined): string {
   return `Rs ${(value ?? 0).toLocaleString("en-IN")}`;
 }
 
-function compactAmount(value: number | undefined): string {
-  return `₹${(value ?? 0).toLocaleString("en-IN")}`;
+export function formatCompactTableAmount(value: number | undefined): string {
+  const numericValue = Number.isFinite(value) ? (value as number) : 0;
+  const absoluteValue = Math.abs(numericValue);
+
+  if (absoluteValue >= 100_000) {
+    return `₹${(numericValue / 100_000).toLocaleString("en-IN", {
+      maximumFractionDigits: 1,
+    })}L`;
+  }
+
+  if (absoluteValue >= 1_000) {
+    return `₹${(numericValue / 1_000).toLocaleString("en-IN", {
+      maximumFractionDigits: 1,
+    })}K`;
+  }
+
+  return `₹${numericValue.toLocaleString("en-IN")}`;
 }
 
 export function sortBookingsForTable(
@@ -238,9 +253,12 @@ export default function BookingListTable({
                   <td className="hidden px-3 py-3 xl:table-cell">
                     {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
                   </td>
-                  <td className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3">
+                  <td
+                    className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                    title={amount(booking.outstanding)}
+                  >
                     <span className="desktop-up:hidden">
-                      {compactAmount(booking.outstanding)}
+                      {formatCompactTableAmount(booking.outstanding)}
                     </span>
                     <span className="hidden desktop-up:inline">
                       {amount(booking.outstanding)}
@@ -261,9 +279,12 @@ export default function BookingListTable({
                   <td className="hidden px-3 py-3 text-slate-600 laptop-up:table-cell">
                     {booking.bookingType}
                   </td>
-                  <td className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3">
+                  <td
+                    className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                    title={amount(booking.outstanding)}
+                  >
                     <span className="desktop-up:hidden">
-                      {compactAmount(booking.outstanding)}
+                      {formatCompactTableAmount(booking.outstanding)}
                     </span>
                     <span className="hidden desktop-up:inline">
                       {amount(booking.outstanding)}

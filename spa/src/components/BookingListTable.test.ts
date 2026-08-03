@@ -5,6 +5,7 @@ import {
   abbreviateBookingStatus,
   abbreviateTableProperties,
   firstTableName,
+  formatCompactTableAmount,
   formatCompactTableDate,
   sortBookingsForTable,
 } from "./BookingListTable";
@@ -39,6 +40,17 @@ describe("sortBookingsForTable", () => {
 describe("compact booking table values", () => {
   it("drops the year from compact dates", () => {
     expect(formatCompactTableDate("2026-08-02T00:00:00Z")).toBe("02 Aug");
+  });
+
+  it.each([
+    [undefined, "₹0"],
+    [950, "₹950"],
+    [1_250, "₹1.3K"],
+    [30_000, "₹30K"],
+    [120_000, "₹1.2L"],
+    [-120_000, "₹-1.2L"],
+  ])("formats compact amount %s as %s", (value, expected) => {
+    expect(formatCompactTableAmount(value)).toBe(expected);
   });
 
   it("uses only the first client name", () => {
