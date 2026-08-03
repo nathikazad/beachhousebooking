@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backup Production Database"
+  short_description: "Create and verify a production database backup"
+  default_prompt: "Use $backup-production-database to create and validate a production database snapshot."
