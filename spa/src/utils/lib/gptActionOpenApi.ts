@@ -30,7 +30,7 @@ export function createGptActionOpenApi(baseUrl: string) {
     servers: [{ url: serverUrl.toString().replace(/\/$/, "") }],
     security: [{ BearerAuth: [] }],
     paths: {
-      "/api/gpt/v1/bookings/{bookingId}": {
+      "/api/gpt/v1/booking": {
         get: {
           operationId: "getBookingDetails",
           summary: "Get one booking by booking number",
@@ -39,7 +39,7 @@ export function createGptActionOpenApi(baseUrl: string) {
           parameters: [
             {
               name: "bookingId",
-              in: "path",
+              in: "query",
               required: true,
               schema: { type: "integer", minimum: 1 },
               description: "Numeric booking number, for example 2542.",

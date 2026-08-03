@@ -13,6 +13,9 @@ describe("GPT action OpenAPI document", () => {
       Object.keys(path)
     );
     expect(operations).toEqual(["get", "get", "get", "get", "get"]);
+    expect(document.paths["/api/gpt/v1/booking"].get.operationId).toBe(
+      "getBookingDetails"
+    );
     expect(document.paths["/api/gpt/v1/metrics"].get.operationId).toBe(
       "getBusinessMetrics"
     );
