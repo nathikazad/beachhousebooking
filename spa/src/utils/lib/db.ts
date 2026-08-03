@@ -246,13 +246,17 @@ export async function findBookingConflicts(
     );
 }
 
-export async function fetchUpcomingBookingConflicts(): Promise<
+export async function fetchUpcomingBookingConflicts(
+    executor?: QueryExecutor
+): Promise<
     AuditedBookingConflict[]
 > {
     const rows = await query(
         `
         SELECT *
-        FROM public.audit_booking_conflicts(false, now())`
+        FROM public.audit_booking_conflicts(false, now())`,
+        undefined,
+        executor
     );
 
     return rows.map(
