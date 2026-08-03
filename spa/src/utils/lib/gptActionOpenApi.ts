@@ -206,6 +206,7 @@ export function createGptActionOpenApi(baseUrl: string) {
       },
     },
     components: {
+      schemas: {},
       securitySchemes: {
         BearerAuth: {
           type: "http",

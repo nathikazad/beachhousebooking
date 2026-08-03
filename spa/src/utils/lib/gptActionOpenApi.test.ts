@@ -7,6 +7,7 @@ describe("GPT action OpenAPI document", () => {
     expect(document.openapi).toBe("3.1.0");
     expect(document.servers).toEqual([{ url: "https://booking.example.com" }]);
     expect(document.security).toEqual([{ BearerAuth: [] }]);
+    expect(document.components.schemas).toEqual({});
 
     const operations = Object.values(document.paths).flatMap((path) =>
       Object.keys(path)
