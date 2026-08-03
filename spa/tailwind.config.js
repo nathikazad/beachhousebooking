@@ -19,6 +19,8 @@ const config = {
     },
     extend: {
       screens: {
+        // Table content can safely expand before the full desktop layout.
+        "table-wide-up": { min: "1200px" },
         //Desktop breackpoints
         "desktop-up": { min: "1367px" },
         "desktop-down": { max: "1920px" },

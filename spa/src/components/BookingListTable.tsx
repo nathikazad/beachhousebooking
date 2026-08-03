@@ -117,17 +117,17 @@ export default function BookingListTable({
       <table className="w-full table-auto text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
+            <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
               {isLog ? "Created" : "Check-in"}
             </th>
-            <th className="w-full px-2 py-3 desktop-up:px-3">Name</th>
-            <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
-              <span className="desktop-up:hidden" aria-label="Property">P</span>
-              <span className="hidden desktop-up:inline">Property</span>
+            <th className="w-full px-2 py-3 table-wide-up:px-3">Name</th>
+            <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
+              <span className="table-wide-up:hidden" aria-label="Property">P</span>
+              <span className="hidden table-wide-up:inline">Property</span>
             </th>
-            <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
-              <span className="desktop-up:hidden" aria-label="Status">S</span>
-              <span className="hidden desktop-up:inline">Status</span>
+            <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
+              <span className="table-wide-up:hidden" aria-label="Status">S</span>
+              <span className="hidden table-wide-up:inline">Status</span>
             </th>
             {isLog ? (
               <>
@@ -140,9 +140,9 @@ export default function BookingListTable({
                 <th className="hidden w-24 px-3 py-3 xl:table-cell">
                   Payment
                 </th>
-                <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
-                  <span className="desktop-up:hidden">Due</span>
-                  <span className="hidden desktop-up:inline">Outstanding</span>
+                <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
+                  <span className="table-wide-up:hidden">Due</span>
+                  <span className="hidden table-wide-up:inline">Outstanding</span>
                 </th>
                 <th className="hidden w-20 px-3 py-3 2xl:table-cell">
                   Guests
@@ -159,9 +159,9 @@ export default function BookingListTable({
                 <th className="hidden w-20 px-3 py-3 laptop-up:table-cell">
                   Type
                 </th>
-                <th className="w-px whitespace-nowrap px-2 py-3 desktop-up:px-3">
-                  <span className="desktop-up:hidden">Due</span>
-                  <span className="hidden desktop-up:inline">Outstanding</span>
+                <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
+                  <span className="table-wide-up:hidden">Due</span>
+                  <span className="hidden table-wide-up:inline">Outstanding</span>
                 </th>
                 <th className="hidden w-20 px-3 py-3 desktop-up:table-cell">
                   Guests
@@ -192,27 +192,27 @@ export default function BookingListTable({
               }}
               className="cursor-pointer bg-white hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
             >
-              <td className="whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3">
-                <span className="desktop-up:hidden">
+              <td className="whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3">
+                <span className="table-wide-up:hidden">
                   {formatCompactTableDate(
                     isLog ? booking.createdDateTime : booking.startDateTime
                   )}
                 </span>
-                <span className="hidden desktop-up:inline">
+                <span className="hidden table-wide-up:inline">
                   {formatDate(
                     isLog ? booking.createdDateTime : booking.startDateTime
                   )}
                 </span>
               </td>
               <td
-                className="max-w-0 px-2 py-3 font-medium text-neutral-900 desktop-up:px-3"
+                className="max-w-0 px-2 py-3 font-medium text-neutral-900 table-wide-up:px-3"
                 title={booking.client.name}
               >
                 <div className="flex min-w-0 items-center">
-                  <span className="min-w-0 truncate desktop-up:hidden">
+                  <span className="min-w-0 truncate table-wide-up:hidden">
                     {firstTableName(booking.client.name)}
                   </span>
-                  <span className="hidden min-w-0 truncate desktop-up:inline">
+                  <span className="hidden min-w-0 truncate table-wide-up:inline">
                     {booking.client.name}
                   </span>
                   {booking.starred ? (
@@ -223,24 +223,24 @@ export default function BookingListTable({
                 </div>
               </td>
               <td
-                className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                className="w-px whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3"
                 title={booking.properties?.join(", ") || undefined}
               >
-                <span className="desktop-up:hidden">
+                <span className="table-wide-up:hidden">
                   {abbreviateTableProperties(booking.properties)}
                 </span>
-                <span className="hidden desktop-up:inline">
+                <span className="hidden table-wide-up:inline">
                   {booking.properties?.join(", ") || "—"}
                 </span>
               </td>
               <td
-                className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                className="w-px whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3"
                 title={booking.status}
               >
-                <span className="desktop-up:hidden">
+                <span className="table-wide-up:hidden">
                   {abbreviateBookingStatus(booking.status)}
                 </span>
-                <span className="hidden desktop-up:inline">{booking.status}</span>
+                <span className="hidden table-wide-up:inline">{booking.status}</span>
               </td>
               {isLog ? (
                 <>
@@ -254,13 +254,13 @@ export default function BookingListTable({
                     {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
                   </td>
                   <td
-                    className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                    className="w-px whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3"
                     title={amount(booking.outstanding)}
                   >
-                    <span className="desktop-up:hidden">
+                    <span className="table-wide-up:hidden">
                       {formatCompactTableAmount(booking.outstanding)}
                     </span>
-                    <span className="hidden desktop-up:inline">
+                    <span className="hidden table-wide-up:inline">
                       {amount(booking.outstanding)}
                     </span>
                   </td>
@@ -280,13 +280,13 @@ export default function BookingListTable({
                     {booking.bookingType}
                   </td>
                   <td
-                    className="w-px whitespace-nowrap px-2 py-3 text-slate-600 desktop-up:px-3"
+                    className="w-px whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3"
                     title={amount(booking.outstanding)}
                   >
-                    <span className="desktop-up:hidden">
+                    <span className="table-wide-up:hidden">
                       {formatCompactTableAmount(booking.outstanding)}
                     </span>
-                    <span className="hidden desktop-up:inline">
+                    <span className="hidden table-wide-up:inline">
                       {amount(booking.outstanding)}
                     </span>
                   </td>
