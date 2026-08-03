@@ -63,7 +63,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           router.push('/protected/logs');
         }
       } else {
-        if ((currentPath !== '/login') && (currentPath !== '/client')) {
+        if ((currentPath !== '/login') && (currentPath !== '/client') && (currentPath !== '/privacy')) {
           router.push('/login');
         }
       }
@@ -73,7 +73,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   }, [currentPath, router]);
 
 
-  const useNoLayout = (!isLaptopOrMore && (currentPath === '/protected/booking/create' || currentPath === '/protected/booking/[id]')) || currentPath === '/client' || currentPath === '/login'
+  const useNoLayout = (!isLaptopOrMore && (currentPath === '/protected/booking/create' || currentPath === '/protected/booking/[id]')) || currentPath === '/client' || currentPath === '/login' || currentPath === '/privacy'
   const Layout = !useNoLayout ? ProtectedLayout : DefaultLayout;
   return <main className={`${plusJakartaSans.className} min-h-screen flex flex-col items-center w-full container !select-none`}> <Layout><Component {...pageProps} /></Layout> </main>
 }
