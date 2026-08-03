@@ -54,6 +54,27 @@ describe("GPT action services", () => {
     );
   });
 
+  it("casts enum property arrays to text arrays for API serialization", async () => {
+    const executor = executorReturning([]);
+    await searchGptBookings({ property: "Bluehouse" }, executor);
+    expect(executor.query).toHaveBeenCalledWith(
+      expect.stringContaining("booking.properties::text[] AS properties"),
+      ["bluehouse", 25]
+    );
+  });
+
+  it("filters every monthly metric by property", async () => {
+    const executor = executorReturning([]);
+    await getGptBusinessMetrics(
+      { month: 7, year: 2026, property: "Bluehouse" },
+      executor
+    );
+    expect(executor.query).toHaveBeenCalledWith(
+      expect.stringContaining("$4::public.property = ANY(booking.properties)"),
+      [2026, 7, null, "bluehouse"]
+    );
+  });
+
   it("rejects invalid dates instead of rolling them into another month", async () => {
     await expect(
       getGptEventSchedule({ date: "2026-02-31" }, executorReturning([]))

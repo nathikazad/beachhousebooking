@@ -136,7 +136,7 @@ export function createGptActionOpenApi(baseUrl: string) {
           operationId: "getBusinessMetrics",
           summary: "Get monthly financial and employee performance metrics",
           description:
-            "Returns cash collected by payment date, confirmed bookings acquired by creation date, confirmed booking value, tax, outstanding balance, check-in value, inquiries, and conversion rate. If employee is supplied, every metric is limited to bookings originally created by that employee.",
+            "Returns cash collected by payment date, confirmed bookings acquired by creation date, confirmed booking value, tax, outstanding balance, check-in value, inquiries, and conversion rate. If employee or property is supplied, every metric is limited to matching bookings.",
           parameters: [
             {
               name: "month",
@@ -156,6 +156,21 @@ export function createGptActionOpenApi(baseUrl: string) {
               schema: {
                 type: "string",
                 enum: ["Indhu", "Thejas", "Yasmeen", "Rafica"],
+              },
+            },
+            {
+              name: "property",
+              in: "query",
+              schema: {
+                type: "string",
+                enum: [
+                  "Bluehouse",
+                  "Glasshouse",
+                  "Meadow Lane",
+                  "Le Chalet",
+                  "Villa Armati",
+                  "Castle",
+                ],
               },
             },
           ],

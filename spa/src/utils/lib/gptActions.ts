@@ -11,8 +11,17 @@ export const GPT_ACTION_EMPLOYEES = [
   "Yasmeen",
   "Rafica",
 ] as const;
+export const GPT_ACTION_PROPERTIES = [
+  "bluehouse",
+  "glasshouse",
+  "meadowlane",
+  "lechalet",
+  "villaarmati",
+  "castle",
+] as const;
 
 export type GptActionEmployee = (typeof GPT_ACTION_EMPLOYEES)[number];
+export type GptActionProperty = (typeof GPT_ACTION_PROPERTIES)[number];
 export type GptBookingStatus =
   | "inquiry"
   | "quotation"
@@ -82,10 +91,23 @@ function canonicalEmployee(value?: string): GptActionEmployee | undefined {
   return employee;
 }
 
+function canonicalProperty(value?: string): GptActionProperty | undefined {
+  if (!value) return undefined;
+  const normalized = value.toLowerCase().replace(/\s/g, "");
+  const property = GPT_ACTION_PROPERTIES.find(
+    (candidate) => candidate === normalized
+  );
+  if (!property) {
+    throw new GptActionInputError(`Unknown property: ${value}.`);
+  }
+  return property;
+}
+
 export interface GptBusinessMetricsInput {
   month?: number;
   year?: number;
   employee?: string;
+  property?: string;
   now?: Date;
 }
 
@@ -96,6 +118,7 @@ export interface GptBusinessMetrics {
     timeZone: typeof GPT_ACTION_TIME_ZONE;
   };
   employee?: GptActionEmployee;
+  property?: string;
   inquiries: number;
   confirmedBookings: number;
   conversionRatePercent: number;
@@ -122,6 +145,7 @@ export async function getGptBusinessMetrics(
     throw new GptActionInputError("year must be an integer from 2000 to 2100.");
   }
   const employee = canonicalEmployee(input.employee);
+  const property = canonicalProperty(input.property);
 
   const rows = await query(
     `
@@ -144,6 +168,7 @@ export async function getGptBusinessMetrics(
         WHERE booking.created_at >= bounds.starts_at
           AND booking.created_at < bounds.ends_at
           AND ($3::text IS NULL OR lower(booking.email) = lower($3::text))
+          AND ($4::text IS NULL OR $4::public.property = ANY(booking.properties))
       ),
       payment_metrics AS (
         SELECT coalesce(sum(payment.amount), 0) AS cash_collected
@@ -153,6 +178,7 @@ export async function getGptBusinessMetrics(
         WHERE payment.payment_date >= bounds.starts_at
           AND payment.payment_date < bounds.ends_at
           AND ($3::text IS NULL OR lower(booking.email) = lower($3::text))
+          AND ($4::text IS NULL OR $4::public.property = ANY(booking.properties))
       ),
       check_in_metrics AS (
         SELECT coalesce(sum(booking.after_tax_total), 0) AS confirmed_check_in_value
@@ -162,10 +188,11 @@ export async function getGptBusinessMetrics(
           AND booking.check_in >= bounds.starts_at
           AND booking.check_in < bounds.ends_at
           AND ($3::text IS NULL OR lower(booking.email) = lower($3::text))
+          AND ($4::text IS NULL OR $4::public.property = ANY(booking.properties))
       )
       SELECT *
       FROM booking_metrics, payment_metrics, check_in_metrics`,
-    [year, month, employee ?? null],
+    [year, month, employee ?? null, property ?? null],
     executor
   );
   const row = rows[0] ?? {};
@@ -175,6 +202,7 @@ export async function getGptBusinessMetrics(
   return {
     period: { month, year, timeZone: GPT_ACTION_TIME_ZONE },
     ...(employee ? { employee } : {}),
+    ...(property ? { property: displayProperty(property) } : {}),
     inquiries,
     confirmedBookings,
     conversionRatePercent:
@@ -255,19 +283,10 @@ export async function searchGptBookings(
     );
   }
   if (input.property) {
-    const databaseProperty = input.property.toLowerCase().replace(/\s/g, "");
-    const allowed = [
-      "bluehouse",
-      "glasshouse",
-      "meadowlane",
-      "lechalet",
-      "villaarmati",
-      "castle",
-    ];
-    if (!allowed.includes(databaseProperty)) {
-      throw new GptActionInputError(`Unknown property: ${input.property}.`);
-    }
-    conditions.push(`${addParam(databaseProperty)}::public.property = ANY(booking.properties)`);
+    const databaseProperty = canonicalProperty(input.property)!;
+    conditions.push(
+      `${addParam(databaseProperty)}::public.property = ANY(booking.properties)`
+    );
   }
   const dateColumn = input.dateBasis === "checkIn" ? "booking.check_in" : "booking.created_at";
   if (input.from) {
@@ -296,7 +315,7 @@ export async function searchGptBookings(
         booking.id,
         booking.client_name,
         booking.status,
-        booking.properties,
+        booking.properties::text[] AS properties,
         booking.check_in,
         booking.check_out,
         booking.created_at,
