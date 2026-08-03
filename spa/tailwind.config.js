@@ -19,6 +19,7 @@ const config = {
     },
     extend: {
       screens: {
+        "table-payment-up": { min: "500px" },
         // Table content can safely expand before the full desktop layout.
         "table-wide-up": { min: "1200px" },
         //Desktop breackpoints

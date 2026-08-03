@@ -3,6 +3,7 @@ import { BookingDB } from "../utils/lib/bookingType";
 import { Property } from "../utils/lib/bookingType";
 import {
   abbreviateBookingStatus,
+  abbreviatePaymentStatus,
   abbreviateTableProperties,
   firstTableName,
   formatCompactTableAmount,
@@ -85,5 +86,14 @@ describe("compact booking table values", () => {
     ["Confirmed", "C"],
   ] as const)("abbreviates status %s as %s", (status, expected) => {
     expect(abbreviateBookingStatus(status)).toBe(expected);
+  });
+
+  it.each([
+    [undefined, "P"],
+    [0, "P"],
+    [1, "U"],
+    [30_000, "U"],
+  ])("abbreviates payment with outstanding %s as %s", (value, expected) => {
+    expect(abbreviatePaymentStatus(value)).toBe(expected);
   });
 });

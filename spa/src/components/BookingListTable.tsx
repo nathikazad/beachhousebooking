@@ -66,6 +66,12 @@ export function abbreviateBookingStatus(status: BookingDB["status"]): string {
   return abbreviations[status] ?? status?.charAt(0).toUpperCase() ?? "—";
 }
 
+export function abbreviatePaymentStatus(
+  outstanding: number | undefined
+): "P" | "U" {
+  return (outstanding ?? 0) === 0 ? "P" : "U";
+}
+
 function amount(value: number | undefined): string {
   return `Rs ${(value ?? 0).toLocaleString("en-IN")}`;
 }
@@ -122,8 +128,7 @@ export default function BookingListTable({
             </th>
             <th className="w-full px-2 py-3 table-wide-up:px-3">Name</th>
             <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
-              <span className="table-wide-up:hidden" aria-label="Property">P</span>
-              <span className="hidden table-wide-up:inline">Property</span>
+              Property
             </th>
             <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
               <span className="table-wide-up:hidden" aria-label="Status">S</span>
@@ -137,8 +142,9 @@ export default function BookingListTable({
                 <th className="hidden w-20 px-3 py-3 laptop-up:table-cell">
                   Type
                 </th>
-                <th className="hidden w-24 px-3 py-3 xl:table-cell">
-                  Payment
+                <th className="hidden w-px whitespace-nowrap px-2 py-3 table-payment-up:table-cell xl:w-24 xl:px-3">
+                  <span className="xl:hidden" aria-label="Payment">P</span>
+                  <span className="hidden xl:inline">Payment</span>
                 </th>
                 <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
                   <span className="table-wide-up:hidden">Due</span>
@@ -153,8 +159,9 @@ export default function BookingListTable({
               </>
             ) : (
               <>
-                <th className="hidden w-24 px-3 py-3 tablet-up:table-cell">
-                  Payment
+                <th className="hidden w-px whitespace-nowrap px-2 py-3 table-payment-up:table-cell tablet-up:w-24 tablet-up:px-3">
+                  <span className="tablet-up:hidden" aria-label="Payment">P</span>
+                  <span className="hidden tablet-up:inline">Payment</span>
                 </th>
                 <th className="hidden w-20 px-3 py-3 laptop-up:table-cell">
                   Type
@@ -250,8 +257,13 @@ export default function BookingListTable({
                   <td className="hidden px-3 py-3 text-slate-600 laptop-up:table-cell">
                     {booking.bookingType}
                   </td>
-                  <td className="hidden px-3 py-3 xl:table-cell">
-                    {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
+                  <td className="hidden w-px whitespace-nowrap px-2 py-3 table-payment-up:table-cell xl:px-3">
+                    <span className="xl:hidden">
+                      {abbreviatePaymentStatus(booking.outstanding)}
+                    </span>
+                    <span className="hidden xl:inline">
+                      {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
+                    </span>
                   </td>
                   <td
                     className="w-px whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3"
@@ -273,8 +285,13 @@ export default function BookingListTable({
                 </>
               ) : (
                 <>
-                  <td className="hidden px-3 py-3 tablet-up:table-cell">
-                    {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
+                  <td className="hidden w-px whitespace-nowrap px-2 py-3 table-payment-up:table-cell tablet-up:px-3">
+                    <span className="tablet-up:hidden">
+                      {abbreviatePaymentStatus(booking.outstanding)}
+                    </span>
+                    <span className="hidden tablet-up:inline">
+                      {(booking.outstanding ?? 0) === 0 ? "Paid" : "Unpaid"}
+                    </span>
                   </td>
                   <td className="hidden px-3 py-3 text-slate-600 laptop-up:table-cell">
                     {booking.bookingType}
