@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import { NextApiRequest } from "next";
+import { getGptOAuthConfig, verifyGptOAuthAccessToken } from "./gptOAuth";
 
 export class GptActionAuthenticationError extends Error {
   constructor() {
@@ -23,12 +24,17 @@ export function isValidGptActionAuthorization(
 }
 
 export function verifyGptActionRequest(request: NextApiRequest): void {
+  const authorization = request.headers.authorization;
   if (
-    !isValidGptActionAuthorization(
-      request.headers.authorization,
-      process.env.GPT_ACTION_API_KEY
-    )
-  ) {
+    process.env.GPT_ACTION_API_KEY &&
+    isValidGptActionAuthorization(authorization, process.env.GPT_ACTION_API_KEY)
+  ) return;
+
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  if (!match) throw new GptActionAuthenticationError();
+  try {
+    verifyGptOAuthAccessToken(match[1], getGptOAuthConfig());
+  } catch {
     throw new GptActionAuthenticationError();
   }
 }

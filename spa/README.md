@@ -34,3 +34,29 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+
+## Custom GPT OAuth
+
+The read-only GPT Action supports per-user OAuth without changing the website's
+existing Supabase access paths. Configure these server-side Vercel variables:
+
+```text
+GPT_AUTHORIZED_USER_IDS=<comma-separated Supabase auth user UUIDs>
+GPT_ACTION_OAUTH_CLIENT_ID=<OAuth client ID configured in the GPT>
+GPT_ACTION_OAUTH_CLIENT_SECRET=<random OAuth client secret>
+GPT_ACTION_OAUTH_SIGNING_SECRET=<separate random token-signing secret>
+GPT_ACTION_OAUTH_REDIRECT_URIS=<exact callback URL shown by the GPT editor>
+```
+
+Configure the GPT Action with:
+
+```text
+Authorization URL: https://<deployment>/oauth/authorize
+Token URL: https://<deployment>/api/gpt/oauth/token
+Scope: gpt.read
+Token exchange method: POST
+```
+
+`GPT_ACTION_API_KEY` remains an optional migration fallback. Remove it from
+Vercel after the OAuth connection is verified so all GPT data requests require
+an approved user token.
