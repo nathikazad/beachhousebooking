@@ -1,5 +1,7 @@
 import { BookingDB, CalendarCell, Event, Property } from "./lib/bookingType";
 
+export const PRECONFIRMED_CALENDAR_COLOR = "#F6BF26";
+
 export function generateHourAvailabilityMapGivenStartDate(
   availabilityMap: Record<string, Record<string, Record<string, boolean>>>,
   year: number,
@@ -89,6 +91,16 @@ export function getPropertyColor(property:Property){
       return  "#129CED";;
   }
 }
+
+export function getBookingCalendarColor(
+  booking: BookingDB,
+  property: Property
+) {
+  return booking.status === "Preconfirmed"
+    ? PRECONFIRMED_CALENDAR_COLOR
+    : getPropertyColor(property);
+}
+
 export function getEventsFromBooking(bookings:BookingDB[],filteredByProperty:Property|'all') {
   
 
@@ -120,7 +132,7 @@ if(filteredByProperty!='all'){
     booking:{...booking},
     startDateTime:event.startDateTime,
     endDateTime:event.endDateTime,
-    color:getPropertyColor(filteredByProperty),
+    color:getBookingCalendarColor(booking, filteredByProperty),
     propertyName:filteredByProperty.toLowerCase(),
     order:Math.floor(Math.random() * 100000) + (booking.bookingId||999)
   
@@ -133,7 +145,7 @@ if(filteredByProperty!='all'){
       booking:{...booking},
       startDateTime:event.startDateTime,
       endDateTime:event.endDateTime,
-      color:getPropertyColor(property),
+      color:getBookingCalendarColor(booking, property),
       propertyName:property.toLowerCase(),
       order:(Math.floor(Math.random() * 100000)  + (booking.bookingId||999))
     }

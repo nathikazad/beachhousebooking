@@ -114,7 +114,7 @@ async function fetchCalendarBookings(date: Date): Promise<BookingDB[]> {
     .select()
     .gte("check_out", `${month}-01T00:00:00.000Z`)
     .lt("check_in", `${nextMonth}-01T00:00:00.000Z`)
-    .eq("status", "confirmed");
+    .in("status", ["confirmed", "preconfirmed"]);
 
   if (error) throw error;
 

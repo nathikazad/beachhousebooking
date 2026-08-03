@@ -193,7 +193,7 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
                                 }}
                                 className={`absolute inset-y-0 min-w-0 flex items-center ${event.segment.startsHere ? 'rounded-l-lg' : ''} ${event.segment.endsHere ? 'rounded-r-lg' : ''}`}
                             >
-                                {event.segment.startsHere && <span className={`text-white text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px] ${dayMaxRow > 3 ? 'xs-only:hidden' : ''}`}>{event.title}</span>}
+                                {event.segment.startsHere && <span className={`${event.booking.status === 'Preconfirmed' ? 'text-black' : 'text-white'} text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px] ${dayMaxRow > 3 ? 'xs-only:hidden' : ''}`}>{event.title}</span>}
                             </div>
                         </li>
                     ))}

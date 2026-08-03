@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getEventsFromBooking } from "./calendarHelpers";
+import {
+  getEventsFromBooking,
+  PRECONFIRMED_CALENDAR_COLOR,
+} from "./calendarHelpers";
 import { BookingDB, Event, Property } from "./lib/bookingType";
 
 function event(name: string, property: Property): Event {
@@ -28,5 +31,20 @@ describe("calendar property filtering", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].propertyName).toBe("castle");
+  });
+
+  it("shows preconfirmed bookings in yellow", () => {
+    const booking = {
+      bookingId: 43,
+      bookingType: "Event",
+      status: "Preconfirmed",
+      client: { name: "Client", phone: "" },
+      events: [event("Provisional event", Property.Bluehouse)],
+    } as BookingDB;
+
+    const result = getEventsFromBooking([booking], "all");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].color).toBe(PRECONFIRMED_CALENDAR_COLOR);
   });
 });
