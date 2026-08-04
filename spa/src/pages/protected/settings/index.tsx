@@ -72,6 +72,15 @@ export default function Settings() {
               <span>Reports</span>
             </LoadingButton>
             <LoadingButton
+              className="mb-4 w-full rounded-lg border-[1px] border-typo_light-200 px-4 py-2 text-typo_light-200"
+              onClick={() => router.push("/protected/reports/employees")}
+            >
+              <span className="material-symbols-outlined text-typo_light-200">
+                groups
+              </span>
+              <span>Employee Reports</span>
+            </LoadingButton>
+            <LoadingButton
               className="mb-4 w-full rounded-lg border-[1px] border-selectedButton px-4 py-2 text-selectedButton"
               onClick={() =>
                 router.push("/protected/settings/check-in-audit")
