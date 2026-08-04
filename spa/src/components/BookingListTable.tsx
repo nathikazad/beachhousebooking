@@ -16,7 +16,7 @@ function formatDate(value: string | undefined): string {
 export function formatCompactTableDate(value: string | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : format(date, "dd MMM");
+  return Number.isNaN(date.getTime()) ? "—" : format(date, "dd/MM");
 }
 
 export function firstTableName(value: string | undefined): string {
@@ -212,7 +212,7 @@ export default function BookingListTable({
                 </span>
               </td>
               <td
-                className="max-w-0 px-2 py-3 font-medium text-neutral-900 table-wide-up:px-3"
+                className="min-w-[12ch] px-2 py-3 font-medium text-neutral-900 table-wide-up:px-3"
                 title={booking.client.name}
               >
                 <div className="flex min-w-0 items-center">

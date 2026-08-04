@@ -40,7 +40,7 @@ describe("sortBookingsForTable", () => {
 
 describe("compact booking table values", () => {
   it("drops the year from compact dates", () => {
-    expect(formatCompactTableDate("2026-08-02T00:00:00Z")).toBe("02 Aug");
+    expect(formatCompactTableDate("2026-08-02T00:00:00Z")).toBe("02/08");
   });
 
   it.each([
