@@ -205,9 +205,13 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
                                     }}
                                     className={`absolute inset-y-0 flex min-w-0 items-center ${event.segment.startsHere ? 'rounded-l-md' : ''} ${event.segment.endsHere ? 'rounded-r-md' : ''}`}
                                 >
-                                    <span className="overflow-hidden whitespace-nowrap px-1 text-[9px] font-bold leading-none text-white">
-                                        {event.title}
-                                    </span>
+                                    {event.segment.startsHere && (
+                                        <span
+                                            className={`whitespace-nowrap px-1 text-[9px] font-bold leading-none text-white ${event.segment.endsHere ? 'overflow-hidden' : 'relative z-10 overflow-visible'}`}
+                                        >
+                                            {event.title}
+                                        </span>
+                                    )}
                                 </div>
                             </li>
                         ))}
