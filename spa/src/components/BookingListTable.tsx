@@ -126,7 +126,9 @@ export default function BookingListTable({
             <th className="w-px whitespace-nowrap py-3 pl-3 pr-2 table-wide-up:px-3">
               {isLog ? "Created" : "Check-in"}
             </th>
-            <th className="w-full px-2 py-3 table-wide-up:px-3">Name</th>
+            <th className="w-[clamp(10rem,22vw,20rem)] max-w-[clamp(10rem,22vw,20rem)] px-2 py-3 table-wide-up:px-3">
+              Name
+            </th>
             <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
               Prop.
             </th>
@@ -211,7 +213,7 @@ export default function BookingListTable({
                 </span>
               </td>
               <td
-                className="min-w-[12ch] px-2 py-3 font-medium text-neutral-900 table-wide-up:px-3"
+                className="w-[clamp(10rem,22vw,20rem)] min-w-[12ch] max-w-[clamp(10rem,22vw,20rem)] px-2 py-3 font-medium text-neutral-900 table-wide-up:px-3"
                 title={booking.client.name}
               >
                 <div className="flex min-w-0 items-center">
