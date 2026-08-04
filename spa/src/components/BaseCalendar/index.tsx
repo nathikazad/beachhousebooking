@@ -6,6 +6,7 @@ import { BookingDB, CalendarCell, convertDateToIndianDate, convertIndianTimeToUT
 import { title } from 'process';
 import { useRouter } from 'next/router';
 import { CalendarEventSegment, calendarEventSegment } from '@/utils/lib/calendarEventGeometry';
+import { splitCalendarEventsForMobile } from '@/utils/lib/calendarMobileRows';
 
 interface BaseCalendarProps {
     onMonthChange: (date: Date) => void
@@ -177,13 +178,52 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
         const list = getTodoList(date);
 
         const displayList = list
+        const { visibleEvents: mobileDisplayList, hiddenCount: mobileHiddenCount } =
+            splitCalendarEventsForMobile(list);
 
         if (list.length) {
 
             return (
-                <ul className={`calendar-todo-list grid  relative`} style={{ gridTemplateRows: `repeat(${dayMaxRow}, 1fr)` }}>
+                <>
+                    <ul
+                        className="calendar-todo-list relative grid min-h-[70px] content-start gap-1 tablet-up:hidden"
+                        style={{
+                            gridTemplateRows: `repeat(${mobileDisplayList.length + (mobileHiddenCount > 0 ? 1 : 0)}, minmax(0, auto))`,
+                        }}
+                    >
+                        {mobileDisplayList.map((event, index) => (
+                            <li
+                                key={`mobile-${event.bookingId}-${event.bookingOrderNumber}-${index}`}
+                                className="relative h-[18px] w-full min-w-0"
+                                style={{ gridRow: index + 1 }}
+                            >
+                                <div
+                                    style={{
+                                        backgroundColor: event.color,
+                                        left: event.segment.startsHere ? '0' : '-6px',
+                                        right: event.segment.endsHere ? '0' : '-6px',
+                                    }}
+                                    className={`absolute inset-y-0 flex min-w-0 items-center ${event.segment.startsHere ? 'rounded-l-md' : ''} ${event.segment.endsHere ? 'rounded-r-md' : ''}`}
+                                >
+                                    <span className="truncate px-1 text-[9px] font-bold leading-none text-white">
+                                        {event.title}
+                                    </span>
+                                </div>
+                            </li>
+                        ))}
+                        {mobileHiddenCount > 0 && (
+                            <li
+                                aria-label={`${mobileHiddenCount} more bookings`}
+                                className="h-2 text-center text-[10px] font-bold leading-[6px] tracking-[2px] text-typo_dark-300"
+                                style={{ gridRow: mobileDisplayList.length + 1 }}
+                            >
+                                •••
+                            </li>
+                        )}
+                    </ul>
+                    <ul className="calendar-todo-list relative hidden tablet-up:grid" style={{ gridTemplateRows: `repeat(${dayMaxRow}, 1fr)` }}>
                     {displayList.map((event, index) => (
-                        <li key={event.title + '-' + index} className={`h-4 ${dayMaxRow > 3 ? 'tablet-down:h-2.5 xs-only:h-1.5' : 'mobile-down:h-3'} my-[2px] relative w-full min-w-0`} style={{ gridRow: event.order }} >
+                        <li key={event.title + '-' + index} className="relative my-[2px] h-4 w-full min-w-0" style={{ gridRow: event.order }} >
                             <div
                                 id={event.title + '-' + index + '-segment'}
                                 style={{
@@ -193,26 +233,28 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
                                 }}
                                 className={`absolute inset-y-0 min-w-0 flex items-center ${event.segment.startsHere ? 'rounded-l-lg' : ''} ${event.segment.endsHere ? 'rounded-r-lg' : ''}`}
                             >
-                                {event.segment.startsHere && <span className={`${event.booking.status === 'Preconfirmed' ? 'text-black' : 'text-white'} text-[8px] pl-1 overflow-hidden whitespace-nowrap text-ellipsis tablet-down:text-[6px] ${dayMaxRow > 3 ? 'xs-only:hidden' : ''}`}>{event.title}</span>}
+                                {event.segment.startsHere && <span className={`${event.booking.status === 'Preconfirmed' ? 'text-black' : 'text-white'} overflow-hidden text-ellipsis whitespace-nowrap pl-1 text-[8px]`}>{event.title}</span>}
                             </div>
                         </li>
                     ))}
-
-                </ul>
+                    </ul>
+                </>
             );
         }
 
-        return <ul className={`calendar-todo-list grid  relative`} style={{ gridTemplateRows: `repeat(${dayMaxRow}, 1fr)` }}>
-            {Array.from({ length: dayMaxRow }).map((e, i) => <li key={`empty-${i}`} className={`flex items-start  relative w-full my-[2px] min-w-0  `} style={{ gridRow: i + 1 }} >
-                <div className={`h-4 ${dayMaxRow > 3 ? 'mobile-down:h-2 xs-only:h-1.5' : 'mobile-down:h-3'} min-w-0 flex-1 rounded-l-lg flex items-center -mr-[6px]`}></div>
-            </li>)}
-
-        </ul>;
+        return <>
+            <ul className="calendar-todo-list relative min-h-[70px] tablet-up:hidden" />
+            <ul className="calendar-todo-list relative hidden tablet-up:grid" style={{ gridTemplateRows: `repeat(${dayMaxRow}, 1fr)` }}>
+                {Array.from({ length: dayMaxRow }).map((e, i) => <li key={`empty-${i}`} className="relative my-[2px] flex w-full min-w-0 items-start" style={{ gridRow: i + 1 }} >
+                    <div className="-mr-[6px] flex h-4 min-w-0 flex-1 items-center rounded-l-lg"></div>
+                </li>)}
+            </ul>
+        </>;
     }
     return (
         <div style={{ width: selectedDate && showEvents && listOfAllEvents.current[selectedDate.getTime()]?.length ? 'calc(100% - 24rem)' : '100%' }}>
             <div className="relative">
-                <Calendar compact className='bg-blueShade rounded-t-xl' renderCell={renderCell} cellClassName={date => `bg-blueShade/10  [&_.rs-calendar-table-cell-content]:!h-auto  `} onChange={date => { setSelectedDate(date); setShowEvents(true) }} onMonthChange={(date) => { onMonthChange(date); setMonthDate(date); setSelectedDate(null); setShowEvents(false) }} />
+                <Calendar compact className='bg-blueShade rounded-t-xl' renderCell={renderCell} cellClassName={date => `bg-blueShade/10 [&_.rs-calendar-table-cell-content]:!h-auto mobile-down:[&_.rs-calendar-table-cell-content]:!min-h-[96px]`} onChange={date => { setSelectedDate(date); setShowEvents(true) }} onMonthChange={(date) => { onMonthChange(date); setMonthDate(date); setSelectedDate(null); setShowEvents(false) }} />
                 {loading && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70"><div className="loader-spinner" aria-label="Loading calendar"></div></div>}
             </div>
             {
