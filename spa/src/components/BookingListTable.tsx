@@ -119,7 +119,7 @@ export default function BookingListTable({
   const displayedBookings = sortBookingsForTable(bookings, list);
 
   return (
-    <div className="my-4 w-full overflow-x-auto rounded-xl border border-gray-200">
+    <div className="-mx-6 my-4 w-[calc(100%+3rem)] overflow-x-auto rounded-xl border border-gray-200 tablet-up:mx-0 tablet-up:w-full">
       <table className="w-full table-auto text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
@@ -128,7 +128,7 @@ export default function BookingListTable({
             </th>
             <th className="w-full px-2 py-3 table-wide-up:px-3">Name</th>
             <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
-              Property
+              Prop.
             </th>
             <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
               <span className="table-wide-up:hidden" aria-label="Status">S</span>
