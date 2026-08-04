@@ -293,7 +293,7 @@ export default function CheckInAuditPage() {
               </table>
             </div>
 
-            <div className="hidden overflow-x-auto rounded-xl border border-[#D0D0D0] laptop-up:block">
+            <div className="hidden max-w-full overflow-x-auto rounded-xl border border-[#D0D0D0] laptop-up:block">
               <table className="w-full min-w-[1420px] text-left text-sm">
                 <thead className="bg-[#F4F4F4]">
                   <tr>

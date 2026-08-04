@@ -52,7 +52,7 @@ export default function ProtectedLayout({
   return (
     <main className="min-h-screen flex flex-col justify-between w-full laptop-up:flex-row-reverse  ">
       {/* Router view */}
-      <section className="router-view flex-1 scroll-auto">
+      <section className="router-view min-w-0 flex-1 scroll-auto">
         {/* header for laptop up */}
         <div className="h-24 px-10 flex items-center border-b-[0.4px] border-[#D0D0D066] justify-between tablet-down:hidden">
           {/* Top Nav */}
