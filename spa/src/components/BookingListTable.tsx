@@ -119,7 +119,9 @@ export default function BookingListTable({
   const displayedBookings = sortBookingsForTable(bookings, list);
 
   return (
-    <div className="-mx-6 my-4 w-[calc(100%+3rem)] overflow-x-auto rounded-xl border border-gray-200 tablet-up:mx-0 tablet-up:w-full">
+    <div
+      className={`${isLog ? "-mx-6 w-[calc(100%+3rem)]" : "mx-0 w-full"} my-4 overflow-x-auto rounded-xl border border-gray-200 tablet-up:mx-0 tablet-up:w-full`}
+    >
       <table className="w-full table-auto text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
