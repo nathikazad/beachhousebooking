@@ -123,7 +123,7 @@ export default function BookingListTable({
       <table className="w-full table-auto text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="w-px whitespace-nowrap px-2 py-3 table-wide-up:px-3">
+            <th className="w-px whitespace-nowrap py-3 pl-3 pr-2 table-wide-up:px-3">
               {isLog ? "Created" : "Check-in"}
             </th>
             <th className="w-full px-2 py-3 table-wide-up:px-3">Name</th>
@@ -181,7 +181,6 @@ export default function BookingListTable({
                 </th>
               </>
             )}
-            <th className="w-10 px-2 py-3" aria-label="Open booking" />
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -199,7 +198,7 @@ export default function BookingListTable({
               }}
               className="cursor-pointer bg-white hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
             >
-              <td className="whitespace-nowrap px-2 py-3 text-slate-600 table-wide-up:px-3">
+              <td className="whitespace-nowrap py-3 pl-3 pr-2 text-slate-600 table-wide-up:px-3">
                 <span className="table-wide-up:hidden">
                   {formatCompactTableDate(
                     isLog ? booking.createdDateTime : booking.startDateTime
@@ -318,11 +317,6 @@ export default function BookingListTable({
                   </td>
                 </>
               )}
-              <td className="px-2 py-3 text-right">
-                <span className="material-symbols-outlined text-xl text-slate-500">
-                  chevron_right
-                </span>
-              </td>
             </tr>
           ))}
         </tbody>
