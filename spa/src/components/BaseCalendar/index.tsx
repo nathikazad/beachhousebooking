@@ -6,7 +6,7 @@ import { BookingDB, CalendarCell, convertDateToIndianDate, convertIndianTimeToUT
 import { title } from 'process';
 import { useRouter } from 'next/router';
 import { CalendarEventSegment, calendarEventSegment } from '@/utils/lib/calendarEventGeometry';
-import { splitCalendarEventsForMobile } from '@/utils/lib/calendarMobileRows';
+import { MOBILE_CALENDAR_EVENT_LIMIT, splitCalendarEventsForMobile } from '@/utils/lib/calendarMobileRows';
 
 interface BaseCalendarProps {
     onMonthChange: (date: Date) => void
@@ -186,16 +186,16 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
             return (
                 <>
                     <ul
-                        className="calendar-todo-list relative grid min-h-[70px] content-start gap-1 tablet-up:hidden"
+                        className="calendar-todo-list relative grid min-h-[110px] content-start gap-0.5 tablet-up:hidden"
                         style={{
-                            gridTemplateRows: `repeat(${mobileDisplayList.length + (mobileHiddenCount > 0 ? 1 : 0)}, minmax(0, auto))`,
+                            gridTemplateRows: `repeat(${MOBILE_CALENDAR_EVENT_LIMIT}, 18px)`,
                         }}
                     >
                         {mobileDisplayList.map((event, index) => (
                             <li
                                 key={`mobile-${event.bookingId}-${event.bookingOrderNumber}-${index}`}
                                 className="relative h-[18px] w-full min-w-0"
-                                style={{ gridRow: index + 1 }}
+                                style={{ gridRow: event.order }}
                             >
                                 <div
                                     style={{
@@ -214,8 +214,7 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
                         {mobileHiddenCount > 0 && (
                             <li
                                 aria-label={`${mobileHiddenCount} more bookings`}
-                                className="h-2 text-center text-[10px] font-bold leading-[6px] tracking-[2px] text-typo_dark-300"
-                                style={{ gridRow: mobileDisplayList.length + 1 }}
+                                className="absolute inset-x-0 bottom-0 h-2 text-center text-[10px] font-bold leading-[6px] tracking-[2px] text-typo_dark-300"
                             >
                                 •••
                             </li>
@@ -243,7 +242,7 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
         }
 
         return <>
-            <ul className="calendar-todo-list relative min-h-[70px] tablet-up:hidden" />
+            <ul className="calendar-todo-list relative min-h-[110px] tablet-up:hidden" />
             <ul className="calendar-todo-list relative hidden tablet-up:grid" style={{ gridTemplateRows: `repeat(${dayMaxRow}, 1fr)` }}>
                 {Array.from({ length: dayMaxRow }).map((e, i) => <li key={`empty-${i}`} className="relative my-[2px] flex w-full min-w-0 items-start" style={{ gridRow: i + 1 }} >
                     <div className="-mr-[6px] flex h-4 min-w-0 flex-1 items-center rounded-l-lg"></div>
@@ -254,7 +253,7 @@ const BaseCalendar: React.FC<BaseCalendarProps> = ({ onMonthChange, bookingsList
     return (
         <div style={{ width: selectedDate && showEvents && listOfAllEvents.current[selectedDate.getTime()]?.length ? 'calc(100% - 24rem)' : '100%' }}>
             <div className="relative">
-                <Calendar compact className='bg-blueShade rounded-t-xl' renderCell={renderCell} cellClassName={date => `bg-blueShade/10 [&_.rs-calendar-table-cell-content]:!h-auto mobile-down:[&_.rs-calendar-table-cell-content]:!min-h-[96px]`} onChange={date => { setSelectedDate(date); setShowEvents(true) }} onMonthChange={(date) => { onMonthChange(date); setMonthDate(date); setSelectedDate(null); setShowEvents(false) }} />
+                <Calendar compact className='bg-blueShade rounded-t-xl' renderCell={renderCell} cellClassName={date => `bg-blueShade/10 [&_.rs-calendar-table-cell-content]:!h-auto mobile-down:[&_.rs-calendar-table-cell-content]:!min-h-[136px]`} onChange={date => { setSelectedDate(date); setShowEvents(true) }} onMonthChange={(date) => { onMonthChange(date); setMonthDate(date); setSelectedDate(null); setShowEvents(false) }} />
                 {loading && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70"><div className="loader-spinner" aria-label="Loading calendar"></div></div>}
             </div>
             {

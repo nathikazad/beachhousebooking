@@ -1,10 +1,10 @@
-export const MOBILE_CALENDAR_EVENT_LIMIT = 3;
+export const MOBILE_CALENDAR_EVENT_LIMIT = 5;
 
-export function splitCalendarEventsForMobile<T>(
+export function splitCalendarEventsForMobile<T extends { order: number }>(
   events: T[],
   limit = MOBILE_CALENDAR_EVENT_LIMIT
 ): { visibleEvents: T[]; hiddenCount: number } {
-  const visibleEvents = events.slice(0, limit);
+  const visibleEvents = events.filter((event) => event.order <= limit);
 
   return {
     visibleEvents,
