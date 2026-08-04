@@ -22,7 +22,7 @@ import {
 } from "@/utils/lib/employeeReports";
 import format from "date-fns/format";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 type EmployeeReportTab = "enquiries" | "checkins";
 
@@ -43,12 +43,21 @@ function fullAmount(value: number): string {
   return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex min-h-24 flex-col justify-center gap-2 rounded-xl bg-typo_light-100 px-4 py-3">
-      <span className="text-xs font-medium text-typo_dark-100">{label}</span>
-      <span className="text-xl font-semibold text-typo_dark-300">{value}</span>
+    <div className="flex min-h-[72px] min-w-0 flex-col justify-center gap-1 rounded-xl bg-typo_light-100 px-3 py-2 tablet-up:min-h-24 tablet-up:gap-2 tablet-up:px-4 tablet-up:py-3">
+      <span className="text-[10px] font-medium text-typo_dark-100 tablet-up:text-xs">{label}</span>
+      <span className="truncate text-base font-semibold text-typo_dark-300 tablet-up:text-xl">{value}</span>
     </div>
+  );
+}
+
+function ResponsiveAmount({ value }: { value: number }) {
+  return (
+    <>
+      <span className="tablet-up:hidden">{formatCompactTableAmount(value)}</span>
+      <span className="hidden tablet-up:inline">{fullAmount(value)}</span>
+    </>
   );
 }
 
@@ -238,17 +247,17 @@ export default function EmployeeReportsView() {
   const activeRows = tab === "enquiries" ? enquiryRows : checkinRows;
 
   return (
-    <div className="flex w-full flex-col gap-5 px-2 pb-10 !select-none mobile-up:px-6 laptop-up:px-10">
-      <div className="flex h-[72px] items-center">
+    <div className="flex w-full flex-col gap-3 px-2 pb-10 !select-none mobile-up:px-6 laptop-up:px-10">
+      <div className="flex h-14 items-center">
         <button aria-label="Back" onClick={() => router.back()} className="material-symbols-outlined cursor-pointer hover:text-selectedButton">arrow_back</button>
         <h1 className="w-full text-center text-lg font-bold leading-6">Employee Reports</h1>
         <span className="w-6" aria-hidden="true" />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 tablet-up:grid-cols-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-typo_dark-100">Month<select aria-label="Month" value={monthIndex} onChange={(event) => setMonthIndex(Number(event.target.value))} className="h-12 rounded-lg border border-gray-200 bg-typo_light-100 px-3 text-sm text-typo_dark-300">{EMPLOYEE_REPORT_MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-typo_dark-100">Year<select aria-label="Year" value={year} onChange={(event) => setYear(Number(event.target.value))} className="h-12 rounded-lg border border-gray-200 bg-typo_light-100 px-3 text-sm text-typo_dark-300">{years.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-typo_dark-100">Employee<select aria-label="Employee" value={employee} onChange={(event) => setEmployee(event.target.value as EmployeeReportEmployee)} className="h-12 rounded-lg border border-gray-200 bg-typo_light-100 px-3 text-sm text-typo_dark-300">{EMPLOYEE_REPORT_EMPLOYEES.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+      <div className="grid grid-cols-[1.1fr_0.8fr_1fr] gap-2 tablet-up:gap-3">
+        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-medium text-typo_dark-100 table-wide-up:text-xs">Month<select aria-label="Month" value={monthIndex} onChange={(event) => setMonthIndex(Number(event.target.value))} className="h-10 min-w-0 rounded-lg border border-gray-200 bg-typo_light-100 px-2 text-xs text-typo_dark-300 table-wide-up:px-3 table-wide-up:text-sm">{EMPLOYEE_REPORT_MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}</select></label>
+        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-medium text-typo_dark-100 table-wide-up:text-xs">Year<select aria-label="Year" value={year} onChange={(event) => setYear(Number(event.target.value))} className="h-10 min-w-0 rounded-lg border border-gray-200 bg-typo_light-100 px-2 text-xs text-typo_dark-300 table-wide-up:px-3 table-wide-up:text-sm">{years.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-medium text-typo_dark-100 table-wide-up:text-xs">Employee<select aria-label="Employee" value={employee} onChange={(event) => setEmployee(event.target.value as EmployeeReportEmployee)} className="h-10 min-w-0 rounded-lg border border-gray-200 bg-typo_light-100 px-2 text-xs text-typo_dark-300 table-wide-up:px-3 table-wide-up:text-sm">{EMPLOYEE_REPORT_EMPLOYEES.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
       </div>
 
       <div role="tablist" aria-label="Employee report type" className="grid grid-cols-2 rounded-xl border border-typo_dark-300 p-1">
@@ -256,29 +265,29 @@ export default function EmployeeReportsView() {
         <button role="tab" aria-selected={tab === "checkins"} onClick={() => { setTab("checkins"); setVisibleRows(PAGE_SIZE); }} className={`rounded-lg px-3 py-2 text-sm font-medium ${tab === "checkins" ? "bg-selectedButton text-white" : "text-typo_dark-300"}`}>Check-ins</button>
       </div>
 
-      <p className="min-h-10 text-sm leading-5 text-typo_dark-100">
-        {tab === "enquiries" ? <>Enquiries handled by <strong>{employee}</strong> in {monthName}. See when each enquiry arrived, whether it became a confirmed booking, and how much it is worth.</> : <>Confirmed bookings handled by <strong>{employee}</strong> that check in during {monthName}. The booking may have been made in an earlier month.</>}
+      <p className="rounded-lg bg-blueShade px-3 py-2 text-xs leading-4 text-typo_dark-100">
+        {tab === "enquiries" ? <><strong>{employee}&apos;s</strong> enquiries received in {monthName}. See the wanted check-in date and whether each enquiry became a booking.</> : <><strong>{employee}&apos;s</strong> confirmed bookings checking in during {monthName}. Some may have been booked in an earlier month.</>}
       </p>
 
       {error ? <div className="rounded-xl bg-error/10 px-4 py-3 text-sm text-error">{error}</div> : null}
 
       {tab === "enquiries" ? (
         <>
-          <div className="grid grid-cols-2 gap-3 desktop-up:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 tablet-up:grid-cols-4 tablet-up:gap-3">
             <StatCard label="New enquiries" value={enquiryCount.toLocaleString("en-IN")} />
             <StatCard label="Confirmed" value={confirmedCount.toLocaleString("en-IN")} />
             <StatCard label="Converted" value={`${Number.isInteger(conversion) ? conversion : conversion.toFixed(1)}%`} />
-            <StatCard label="Booking value" value={fullAmount(Number(monthlyReservations.confirmedSum || 0))} />
+            <StatCard label="Booking value" value={<ResponsiveAmount value={Number(monthlyReservations.confirmedSum || 0)} />} />
           </div>
           <section><h2 className="title">Enquiries by day</h2><InquiriesVsConfirmed data={reservationReport} /></section>
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 desktop-up:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 tablet-up:grid-cols-4 tablet-up:gap-3">
             <StatCard label="Check-ins" value={Number(monthlyCheckins.count || 0).toLocaleString("en-IN")} />
-            <StatCard label="Check-in value" value={fullAmount(Number(monthlyCheckins.sum || 0))} />
-            <StatCard label="Average value" value={fullAmount(Number(monthlyCheckins.average || 0))} />
-            <StatCard label="Tax" value={fullAmount(Number(monthlyCheckins.taxTotal || 0))} />
+            <StatCard label="Check-in value" value={<ResponsiveAmount value={Number(monthlyCheckins.sum || 0)} />} />
+            <StatCard label="Average value" value={<ResponsiveAmount value={Number(monthlyCheckins.average || 0)} />} />
+            <StatCard label="Tax" value={<ResponsiveAmount value={Number(monthlyCheckins.taxTotal || 0)} />} />
           </div>
           <section><h2 className="title">Check-in value by day</h2><IncomeFromCheckin data={checkinReport} /></section>
         </>
