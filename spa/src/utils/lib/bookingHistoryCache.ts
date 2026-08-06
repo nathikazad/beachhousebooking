@@ -1,4 +1,8 @@
 import { BookingDB } from "./bookingType";
+import {
+  readOfflineBookingHistory,
+  writeOfflineBookingHistory,
+} from "./offlineBookingStore";
 
 type BookingHistoryLoader = () => Promise<BookingDB[]>;
 export interface BookingHistorySnapshot {
@@ -50,6 +54,7 @@ export function writeBookingHistoryCache(
       historyCount: history.length,
     });
   }
+  void writeOfflineBookingHistory(bookingId, history).catch(() => undefined);
 }
 
 export function invalidateBookingHistoryCache(bookingId: number): void {
@@ -89,6 +94,11 @@ export async function loadLatestBookingCached(
   const request = loader()
     .then((snapshot) => {
       latestBookingCache.set(bookingId, cloneSnapshot(snapshot));
+      void writeOfflineBookingHistory(
+        bookingId,
+        snapshot.history,
+        snapshot.historyCount
+      ).catch(() => undefined);
       return latestBookingCache.get(bookingId)!;
     })
     .finally(() => {
@@ -96,6 +106,13 @@ export async function loadLatestBookingCached(
     });
 
   latestBookingRequests.set(bookingId, request);
+  const stored = await readOfflineBookingHistory(bookingId).catch(() => null);
+  if (stored) {
+    latestBookingCache.set(bookingId, cloneSnapshot(stored));
+    observeSource?.("latest-cache");
+    void request.catch(() => undefined);
+    return cloneSnapshot(stored);
+  }
   return request.then(cloneSnapshot);
 }
 
@@ -121,7 +138,35 @@ export async function loadBookingHistoryCached(
     });
 
   bookingHistoryRequests.set(bookingId, request);
+  const stored = await readOfflineBookingHistory(bookingId).catch(() => null);
+  if (stored && stored.historyCount === stored.history.length) {
+    writeBookingHistoryCache(bookingId, stored.history);
+    void request.catch(() => undefined);
+    return stored.history;
+  }
   return request.then(cloneHistory);
+}
+
+export async function refreshLatestBookingCached(
+  bookingId: number,
+  loader: LatestBookingLoader
+): Promise<BookingHistorySnapshot> {
+  const existing = latestBookingRequests.get(bookingId);
+  if (existing) return existing.then(cloneSnapshot);
+
+  const request = loader()
+    .then((snapshot) => {
+      latestBookingCache.set(bookingId, cloneSnapshot(snapshot));
+      void writeOfflineBookingHistory(
+        bookingId,
+        snapshot.history,
+        snapshot.historyCount
+      ).catch(() => undefined);
+      return latestBookingCache.get(bookingId)!;
+    })
+    .finally(() => latestBookingRequests.delete(bookingId));
+  latestBookingRequests.set(bookingId, request);
+  return request.then(cloneSnapshot);
 }
 
 export function clearBookingHistoryCache(): void {

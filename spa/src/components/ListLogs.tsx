@@ -25,6 +25,7 @@ import { bookingSummaryFromRow } from "@/utils/lib/financials";
 import {
   bookingListCacheKey,
   readBookingListCache,
+  readPersistentBookingListCache,
   writeBookingListCache,
 } from "@/utils/lib/bookingListCache";
 import Properties from "./Properties";
@@ -95,7 +96,13 @@ export default function ListLogs({ className }: ListLogsProps) {
       searchText: searchText ?? "",
       numOfBookings,
     });
-    const cachedBookings = readBookingListCache(cacheKey);
+    const requestId = Date.now();
+    latestRequestRef.current = requestId;
+    let cachedBookings = readBookingListCache(cacheKey);
+    if (!cachedBookings) {
+      cachedBookings = await readPersistentBookingListCache(cacheKey);
+      if (latestRequestRef.current !== requestId) return;
+    }
     if (cachedBookings) {
       setState((prevState) => ({
         ...prevState,
@@ -112,14 +119,11 @@ export default function ListLogs({ className }: ListLogsProps) {
             ?.scrollIntoView({ behavior: "smooth" });
         }
       }, 0);
-      return;
     }
 
-    setLoading(true);
+    setLoading(!cachedBookings);
     setLoadingForward(true);
 
-    const requestId = new Date().getTime();
-    latestRequestRef.current = requestId;
     let bookingsData = supabase.from("bookings").select();
 
     if (searchText) {
@@ -166,7 +170,13 @@ export default function ListLogs({ className }: ListLogsProps) {
     if (!dateBounds) {
       bookingsData = bookingsData.range(0, numOfBookings);
     }
-    let { data: result } = await bookingsData;
+    let { data: result, error } = await bookingsData;
+    if (error) {
+      if (!cachedBookings) console.error("Unable to load bookings", error);
+      setLoading(false);
+      setLoadingForward(false);
+      return;
+    }
     // Check if this is the latest request
     if (latestRequestRef.current !== requestId) return;
 

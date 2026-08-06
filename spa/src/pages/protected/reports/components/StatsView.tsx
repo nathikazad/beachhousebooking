@@ -7,6 +7,10 @@ import { useRouter } from 'next/navigation'
 import BaseSelect from "@/components/ui/BaseSelect";
 import { supabase } from "@/utils/supabase/client";
 import IncomeFromCheckin from "./IncomeFromCheckin";
+import {
+  readOfflineDocument,
+  writeOfflineDocument,
+} from "@/utils/lib/offlineBookingStore";
 
 const MONTH_NAMES = [
   "January",
@@ -65,51 +69,47 @@ export default function StatsView() {
     maximumFractionDigits: 0,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-  const fetchData = () => {
+  const fetchData = async () => {
     setLoading(true);
-    supabase
-      .rpc("get_booking_stats", {
+    const parameters = {
         month: monthConvert[formState.filter.month],
         year: formState.filter.year,
         employee: formState.filter.employee,
         referral: formState.filter.referral,
-      })
-      .then(({ data, error }) => {
-        if (error) {
-          console.log("error ", error);
-        }
-        setFormState((prevState) => {
-          return {
-            ...prevState,
-            rawReservationsResponse: data,
-          };
-        });
-        console.log(" rawReservationsResponse: ", data);
-      });
+    };
+    const offlineKey = `report:overview:${JSON.stringify(parameters)}`;
+    const stored = await readOfflineDocument<{
+      reservations: any;
+      checkins: any;
+    }>(offlineKey).catch(() => null);
+    if (stored) {
+      setFormState((prevState) => ({
+        ...prevState,
+        rawReservationsResponse: stored.reservations,
+        rawCheckinsResponse: stored.checkins,
+      }));
+      setLoading(false);
+    }
 
-    supabase
-      .rpc("get_checkin_stats", {
-        month: monthConvert[formState.filter.month],
-        year: formState.filter.year,
-        employee: formState.filter.employee,
-        referral: formState.filter.referral,
-      })
-      .then(({ data, error }) => {
-        if (error) {
-          console.log("error ", error);
-        }
-        setFormState((prevState) => {
-          return {
-            ...prevState,
-            rawCheckinsResponse: data,
-          };
-        });
-        setLoading(false);
-        console.log(" rawCheckinsResponse: ", data);
-      });
+    const [reservations, checkins] = await Promise.all([
+      supabase.rpc("get_booking_stats", parameters),
+      supabase.rpc("get_checkin_stats", parameters),
+    ]);
+    if (reservations.error || checkins.error) {
+      console.error("Unable to refresh reports", reservations.error || checkins.error);
+      setLoading(false);
+      return;
+    }
+    setFormState((prevState) => ({
+      ...prevState,
+      rawReservationsResponse: reservations.data,
+      rawCheckinsResponse: checkins.data,
+    }));
+    void writeOfflineDocument(offlineKey, {
+      reservations: reservations.data,
+      checkins: checkins.data,
+    }).catch(() => undefined);
+    setLoading(false);
   };
 
   const [formState, setFormState] = useState<StatsState>({

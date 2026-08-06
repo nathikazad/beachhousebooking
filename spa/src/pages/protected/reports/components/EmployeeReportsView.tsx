@@ -23,6 +23,10 @@ import {
 import format from "date-fns/format";
 import { useRouter } from "next/router";
 import { ReactNode, useEffect, useRef, useState } from "react";
+import {
+  readOfflineDocument,
+  writeOfflineDocument,
+} from "@/utils/lib/offlineBookingStore";
 
 type EmployeeReportTab = "enquiries" | "checkins";
 
@@ -33,6 +37,13 @@ interface ReportResponse {
 
 const EMPTY_REPORT: ReportResponse = { daily: {}, monthly: {} };
 const PAGE_SIZE = 15;
+
+interface StoredEmployeeReport {
+  reservationReport: ReportResponse;
+  checkinReport: ReportResponse;
+  enquiryRows: EmployeeReportBookingRow[];
+  checkinRows: EmployeeReportBookingRow[];
+}
 
 function fullDate(value: string): string {
   const date = new Date(value);
@@ -187,30 +198,46 @@ export default function EmployeeReportsView() {
   useEffect(() => {
     const requestId = ++requestRef.current;
     const bounds = employeeReportMonthBounds(monthIndex, year);
+    const offlineKey = `report:employee:${employee}:${year}:${monthIndex}`;
     setLoading(true);
     setError(null);
     setVisibleRows(PAGE_SIZE);
 
-    const reservationStats = supabase.rpc("get_booking_stats", {
+    const load = async () => {
+      let hadStoredData = false;
+      const stored = await readOfflineDocument<StoredEmployeeReport>(offlineKey).catch(
+        () => null
+      );
+      if (requestRef.current !== requestId) return;
+      if (stored) {
+        hadStoredData = true;
+        setReservationReport(stored.reservationReport);
+        setCheckinReport(stored.checkinReport);
+        setEnquiryRows(stored.enquiryRows);
+        setCheckinRows(stored.checkinRows);
+        setLoading(false);
+      }
+
+      const reservationStats = supabase.rpc("get_booking_stats", {
       month: monthIndex + 1,
       year,
       employee,
       referral: null,
     });
-    const checkinStats = supabase.rpc("get_checkin_stats", {
+      const checkinStats = supabase.rpc("get_checkin_stats", {
       month: monthIndex + 1,
       year,
       employee,
       referral: null,
     });
-    const enquiries = supabase
+      const enquiries = supabase
       .from("bookings")
       .select("id,client_name,created_at,check_in,status,total_cost")
       .eq("email", employee)
       .gte("created_at", bounds.start)
       .lt("created_at", bounds.end)
       .order("created_at", { ascending: false });
-    const checkins = supabase
+      const checkins = supabase
       .from("bookings")
       .select("id,client_name,created_at,check_in,status,total_cost")
       .eq("email", employee)
@@ -219,24 +246,34 @@ export default function EmployeeReportsView() {
       .lt("check_in", bounds.end)
       .order("check_in", { ascending: true });
 
-    Promise.all([reservationStats, checkinStats, enquiries, checkins])
-      .then(([reservationResult, checkinResult, enquiryResult, rowCheckinResult]) => {
+      try {
+        const [reservationResult, checkinResult, enquiryResult, rowCheckinResult] =
+          await Promise.all([reservationStats, checkinStats, enquiries, checkins]);
         if (requestRef.current !== requestId) return;
         const firstError = reservationResult.error || checkinResult.error || enquiryResult.error || rowCheckinResult.error;
         if (firstError) throw firstError;
-        setReservationReport((reservationResult.data as ReportResponse) || EMPTY_REPORT);
-        setCheckinReport((checkinResult.data as ReportResponse) || EMPTY_REPORT);
-        setEnquiryRows((enquiryResult.data || []).map((row) => employeeReportRowFromDatabase(row)));
-        setCheckinRows((rowCheckinResult.data || []).map((row) => employeeReportRowFromDatabase(row)));
-      })
-      .catch((fetchError) => {
+        const fresh: StoredEmployeeReport = {
+          reservationReport: (reservationResult.data as ReportResponse) || EMPTY_REPORT,
+          checkinReport: (checkinResult.data as ReportResponse) || EMPTY_REPORT,
+          enquiryRows: (enquiryResult.data || []).map((row) => employeeReportRowFromDatabase(row)),
+          checkinRows: (rowCheckinResult.data || []).map((row) => employeeReportRowFromDatabase(row)),
+        };
+        setReservationReport(fresh.reservationReport);
+        setCheckinReport(fresh.checkinReport);
+        setEnquiryRows(fresh.enquiryRows);
+        setCheckinRows(fresh.checkinRows);
+        void writeOfflineDocument(offlineKey, fresh).catch(() => undefined);
+      } catch (fetchError) {
         if (requestRef.current !== requestId) return;
         console.error("Unable to load employee reports", fetchError);
-        setError("Employee report data could not be loaded. Please try again.");
-      })
-      .finally(() => {
+        if (!hadStoredData) {
+          setError("Employee report data could not be loaded. Please try again.");
+        }
+      } finally {
         if (requestRef.current === requestId) setLoading(false);
-      });
+      }
+    };
+    void load();
   }, [employee, monthIndex, year]);
 
   const monthlyReservations = reservationReport.monthly || {};

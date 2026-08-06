@@ -27,6 +27,7 @@ import { useSearchParams } from "next/navigation";
 import {
   bookingListCacheKey,
   readBookingListCache,
+  readPersistentBookingListCache,
   writeBookingListCache,
 } from "@/utils/lib/bookingListCache";
 import {
@@ -102,7 +103,13 @@ export default function ListBooking({ className }: ListBookingProps) {
       numOfBookingsBackward,
       numOfBookingsForward,
     });
-    const cachedBookings = readBookingListCache(cacheKey);
+    const requestId = Date.now();
+    latestRequestRef.current = requestId;
+    let cachedBookings = readBookingListCache(cacheKey);
+    if (!cachedBookings) {
+      cachedBookings = await readPersistentBookingListCache(cacheKey);
+      if (latestRequestRef.current !== requestId) return;
+    }
     if (cachedBookings) {
       setState((prevState) => ({
         ...prevState,
@@ -125,12 +132,9 @@ export default function ListBooking({ className }: ListBookingProps) {
             ?.scrollIntoView({ behavior: "smooth" });
         }
       }, 0);
-      return;
     }
 
-    const requestId = new Date().getTime();
-    latestRequestRef.current = requestId;
-    setLoading(true);
+    setLoading(!cachedBookings);
     setLoadingForward(true);
     setLoadingBackward(true);
     let bookingsData = supabase.from("bookings").select();
@@ -207,6 +211,9 @@ export default function ListBooking({ className }: ListBookingProps) {
         bookingsDataForward,
       ]);
 
+      if (backwardResults.error) throw backwardResults.error;
+      if (forwardResults.error) throw forwardResults.error;
+
       // Check if this is the latest request
       if (latestRequestRef.current !== requestId) return;
 
@@ -244,6 +251,8 @@ export default function ListBooking({ className }: ListBookingProps) {
     } catch (error) {
       console.error("Error fetching data:", error);
       setLoading(false);
+      setLoadingForward(false);
+      setLoadingBackward(false);
     }
   }
 

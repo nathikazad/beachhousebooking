@@ -5,6 +5,8 @@ import eventEmitter from "@/utils/eventEmitter";
 import { supabase } from "@/utils/supabase/client";
 import { useRouter } from "next/router";
 import { ChangeEvent, useEffect, useState } from "react";
+import OfflineStatus from "@/components/OfflineStatus";
+import { clearOfflineDataForCurrentUser } from "@/utils/lib/offlineBookingStore";
 
 export default function ProtectedLayout({
   children,
@@ -24,6 +26,7 @@ export default function ProtectedLayout({
     setSearchText(value);
   };
   const signOut = async () => {
+    await clearOfflineDataForCurrentUser();
     await supabase.auth.signOut();
     router.push("/");
   };
@@ -38,9 +41,12 @@ export default function ProtectedLayout({
   }, []);
   useEffect(() => {
     const fetchUser = async () => {
-      let {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user ?? null;
+      if (navigator.onLine) {
+        const verified = await supabase.auth.getUser();
+        user = verified.data.user ?? user;
+      }
       console.log("====================================");
       console.log(user);
       console.log("====================================");
@@ -98,6 +104,7 @@ export default function ProtectedLayout({
             </div>
           </div>
         </div>
+        <OfflineStatus />
         {children}
       </section>
       {/* Bottom Nav bar */}

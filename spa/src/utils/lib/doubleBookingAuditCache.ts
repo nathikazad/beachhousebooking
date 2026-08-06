@@ -1,4 +1,7 @@
 import { DoubleBookingAuditResponse } from "./conflictAudit";
+import { readOfflineDocument, writeOfflineDocument } from "./offlineBookingStore";
+
+const OFFLINE_KEY = "audit:double-bookings";
 
 const AUDIT_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -25,6 +28,17 @@ export function writeDoubleBookingAuditCache(
     cachedAt: Date.now(),
     data,
   };
+  void writeOfflineDocument(OFFLINE_KEY, data).catch(() => undefined);
+}
+
+export async function readPersistentDoubleBookingAuditCache(): Promise<DoubleBookingAuditResponse | null> {
+  const stored = await readOfflineDocument<DoubleBookingAuditResponse>(OFFLINE_KEY).catch(
+    () => null
+  );
+  if (stored) {
+    auditCache = { cachedAt: Date.now(), data: stored };
+  }
+  return stored;
 }
 
 export function invalidateDoubleBookingAuditCache(): void {

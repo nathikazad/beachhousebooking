@@ -5,12 +5,14 @@ import {
   invalidateBookingHistoryCache,
   loadLatestBookingCached,
   loadBookingHistoryCached,
+  refreshLatestBookingCached,
 } from "./lib/bookingHistoryCache";
 import { BookingReadRow, bookingReadResult } from "./lib/bookingRead";
 import { invalidateCheckInAuditCache } from "./lib/checkInAuditCache";
 import { invalidateDoubleBookingAuditCache } from "./lib/doubleBookingAuditCache";
 import { invalidateBookingListCache } from "./lib/bookingListCache";
 import { markCalendarViewCacheStale } from "./lib/calendarViewCache";
+import { removeOfflineBooking } from "./lib/offlineBookingStore";
 import { supabase } from "./supabase/client";
 
 export const monthConvertFromNumber: Record<number, string> = {
@@ -141,6 +143,18 @@ export async function getLatestBookingHistory(
   }
 
   return fetchBookingHistory(identifier, false);
+}
+
+export async function refreshLatestBookingHistory(
+  bookingId: number
+): Promise<BookingHistorySnapshot> {
+  return refreshLatestBookingCached(bookingId, async () => {
+    const result = await fetchDirectBookingRead(
+      "booking_current_details",
+      bookingId
+    );
+    return { history: result.history, historyCount: result.historyCount };
+  });
 }
 
 type BookingReadView =
@@ -309,6 +323,7 @@ export const deleteBooking = async (bookingId: number) => {
       invalidateDoubleBookingAuditCache();
       invalidateBookingListCache();
       markCalendarViewCacheStale();
+      void removeOfflineBooking(bookingId).catch(() => undefined);
     }
     console.log('Deleted id: ', bookingId);
 

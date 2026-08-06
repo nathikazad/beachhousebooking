@@ -24,6 +24,7 @@ import ProtectedLayout from 'src/layouts/ProtectedLayout';
 import React, { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '@/utils/supabase/client';
+import { setOfflineDataUser } from '@/utils/lib/offlineBookingStore';
 
 const DefaultLayout = ({ children }: { children: ReactNode }) => {
   return (
@@ -55,8 +56,14 @@ function MyApp({ Component, pageProps }: AppProps) {
   }, []);
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user ?? null;
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        const verified = await supabase.auth.getUser();
+        user = verified.data.user ?? user;
+      }
       const userId = user?.id;
+      setOfflineDataUser(userId ?? null);
 
       if (userId) {
         if (currentPath === '/login') {

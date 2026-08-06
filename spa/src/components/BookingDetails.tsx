@@ -20,6 +20,7 @@ import { useRouter } from "next/router";
 import {
   getBookingHistory,
   getLatestBookingHistory,
+  refreshLatestBookingHistory,
 } from "@/utils/serverCommunicator";
 import { calculateGstPercentage } from "@/utils/lib/gst";
 
@@ -65,8 +66,10 @@ export default function BookingDetailsComponent({
   const pathname = usePathname();
   useEffect(() => {
     if (bookingId) {
-      getLatestBookingHistory({ bookingId }).then(
-        ({ history, historyCount: loadedHistoryCount }) => {
+      const applySnapshot = ({
+        history,
+        historyCount: loadedHistoryCount,
+      }: { history: BookingDB[]; historyCount: number }) => {
           const currentIndex = history.length - 1;
           const newData = history[currentIndex];
           if (!newData) return;
@@ -80,8 +83,12 @@ export default function BookingDetailsComponent({
           }));
           setHistoryCount(loadedHistoryCount);
           setIsSwitchOn(newData.bookingType === "Stay" ? false : true);
-        }
-      );
+      };
+      getLatestBookingHistory({ bookingId })
+        .then(applySnapshot)
+        .then(() => refreshLatestBookingHistory(bookingId))
+        .then(applySnapshot)
+        .catch((error) => console.error("Unable to refresh booking", error));
     }
   }, [bookingId]);
 

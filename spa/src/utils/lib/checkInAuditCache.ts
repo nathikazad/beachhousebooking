@@ -1,4 +1,7 @@
 import { CheckInAuditRow } from "./checkInAudit";
+import { readOfflineDocument, writeOfflineDocument } from "./offlineBookingStore";
+
+const OFFLINE_KEY = "audit:check-in";
 
 export interface CheckInAuditResponse {
   generatedAt: string;
@@ -17,6 +20,14 @@ function cloneAudit(audit: CheckInAuditResponse): CheckInAuditResponse {
 
 export function readCheckInAuditCache(): CheckInAuditResponse | null {
   return auditCache ? cloneAudit(auditCache) : null;
+}
+
+export async function readPersistentCheckInAuditCache(): Promise<CheckInAuditResponse | null> {
+  const stored = await readOfflineDocument<CheckInAuditResponse>(OFFLINE_KEY).catch(
+    () => null
+  );
+  if (stored) auditCache = cloneAudit(stored);
+  return stored;
 }
 
 export function invalidateCheckInAuditCache(): void {
@@ -41,6 +52,7 @@ export async function loadCheckInAuditCached(
     .then((audit) => {
       if (requestGeneration === cacheGeneration) {
         auditCache = cloneAudit(audit);
+        void writeOfflineDocument(OFFLINE_KEY, audit).catch(() => undefined);
       }
       return audit;
     })

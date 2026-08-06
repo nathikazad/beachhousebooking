@@ -20,6 +20,13 @@ const withPWA = require("next-pwa")({
   runtimeCaching: [
     {
       urlPattern: ({ url }) =>
+        url.hostname.endsWith(".supabase.co") &&
+        url.pathname.startsWith("/rest/v1/"),
+      handler: "NetworkOnly",
+      method: "GET",
+    },
+    {
+      urlPattern: ({ url }) =>
         url.origin === self.location.origin &&
         [
           "/api/booking",

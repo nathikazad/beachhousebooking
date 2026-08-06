@@ -4,23 +4,70 @@ import { supabase } from '@/utils/supabase/client';
 import { useEffect, useState } from "react";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { canSeeReportsAndAudits } from "@/utils/lib/restrictedSettings";
+import {
+  clearOfflineDataForCurrentUser,
+  getOfflineSyncStatus,
+  hardSyncOfflineBookings,
+  OfflineSyncStatus,
+  subscribeOfflineStatus,
+} from "@/utils/lib/offlineBookingStore";
+import { invalidateBookingListCache } from "@/utils/lib/bookingListCache";
+import { clearCalendarViewCache } from "@/utils/lib/calendarViewCache";
+import { clearBookingHistoryCache } from "@/utils/lib/bookingHistoryCache";
 
 
 
 export default function Settings() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<OfflineSyncStatus>({
+    lastSyncedAt: null,
+    bookingCount: 0,
+  });
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
-      let { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user ?? null;
+      if (navigator.onLine) {
+        const verified = await supabase.auth.getUser();
+        user = verified.data.user ?? user;
+      }
       setUser(user);
     };
 
     fetchUser();
   }, []);
 
+  useEffect(() => {
+    const refresh = () => void getOfflineSyncStatus().then(setSyncStatus);
+    refresh();
+    return subscribeOfflineStatus(refresh);
+  }, []);
+
+  const hardSync = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const status = await hardSyncOfflineBookings();
+      invalidateBookingListCache();
+      clearCalendarViewCache();
+      clearBookingHistoryCache();
+      setSyncStatus(status);
+      setSyncMessage(`${status.bookingCount} bookings saved for offline viewing.`);
+    } catch (error) {
+      setSyncMessage(
+        error instanceof Error ? error.message : "Unable to sync offline data."
+      );
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const signOut = async () => {
+    await clearOfflineDataForCurrentUser();
     await supabase.auth.signOut();
     router.push("/");
   };
@@ -102,6 +149,37 @@ export default function Settings() {
             </LoadingButton>
           </>
         ) : null}
+        <div className="mb-4 rounded-lg border border-typo_light-100 p-3">
+          <div className="mb-3">
+            <h3 className="subheading !my-0">Offline data</h3>
+            <p className="mt-1 text-xs text-typo_light-200">
+              Save the latest bookings on this device for viewing without internet.
+            </p>
+            <p className="mt-1 text-xs text-typo_light-200">
+              {syncStatus.lastSyncedAt
+                ? `${syncStatus.bookingCount} bookings · Last synced ${new Date(
+                    syncStatus.lastSyncedAt
+                  ).toLocaleString("en-IN", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}`
+                : "Not synced on this device yet"}
+            </p>
+            {syncMessage ? (
+              <p className="mt-2 text-xs text-typo_dark-200">{syncMessage}</p>
+            ) : null}
+          </div>
+          <LoadingButton
+            className="w-full rounded-lg border border-selectedButton px-4 py-2 text-selectedButton"
+            onClick={() => void hardSync()}
+            loading={syncing}
+          >
+            <span className="material-symbols-outlined text-selectedButton">
+              sync
+            </span>
+            <span>Hard sync offline data</span>
+          </LoadingButton>
+        </div>
         <LoadingButton
           className=" border-[1px] border-error text-error w-full py-2 px-4 rounded-lg"
           onClick={signOut}

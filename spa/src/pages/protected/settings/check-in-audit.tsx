@@ -23,12 +23,14 @@ import {
   CheckInAuditResponse,
   loadCheckInAuditCached,
   readCheckInAuditCache,
+  readPersistentCheckInAuditCache,
 } from "@/utils/lib/checkInAuditCache";
 import { supabase } from "@/utils/supabase/client";
 
 export default function CheckInAuditPage() {
   const router = useRouter();
   const initialAudit = useRef(readCheckInAuditCache());
+  const hasSavedAudit = useRef(initialAudit.current !== null);
   const currentPeriod = useMemo(
     () => getCurrentCheckInAuditPeriod(),
     []
@@ -76,20 +78,32 @@ export default function CheckInAuditPage() {
       }, force);
       setAudit(data);
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load the check-in audit."
-      );
+      if (!hasSavedAudit.current) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load the check-in audit."
+        );
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!initialAudit.current) {
-      loadAudit();
-    }
+    let cancelled = false;
+    void readPersistentCheckInAuditCache().then((stored) => {
+      if (!cancelled && stored && !initialAudit.current) {
+        hasSavedAudit.current = true;
+        setAudit(stored);
+        setError("");
+        setLoading(false);
+      }
+    });
+    void loadAudit(true);
+    return () => {
+      cancelled = true;
+    };
   }, [loadAudit]);
 
   const availableYears = useMemo(

@@ -16,6 +16,7 @@ import {
 } from "@/utils/lib/bookingNavigation";
 import {
   readDoubleBookingAuditCache,
+  readPersistentDoubleBookingAuditCache,
   writeDoubleBookingAuditCache,
 } from "@/utils/lib/doubleBookingAuditCache";
 import {
@@ -35,6 +36,7 @@ function displayEventName(eventName: string): string {
 export default function DoubleBookingsPage() {
   const router = useRouter();
   const initialAudit = useRef(readDoubleBookingAuditCache());
+  const hasSavedAudit = useRef(initialAudit.current !== null);
   const [audit, setAudit] = useState<DoubleBookingAuditResponse | null>(
     initialAudit.current
   );
@@ -69,20 +71,32 @@ export default function DoubleBookingsPage() {
       writeDoubleBookingAuditCache(data);
       setAudit(data);
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load double bookings."
-      );
+      if (!hasSavedAudit.current) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load double bookings."
+        );
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!initialAudit.current) {
-      loadDoubleBookings();
-    }
+    let cancelled = false;
+    void readPersistentDoubleBookingAuditCache().then((stored) => {
+      if (!cancelled && stored && !initialAudit.current) {
+        hasSavedAudit.current = true;
+        setAudit(stored);
+        setError("");
+        setLoading(false);
+      }
+    });
+    void loadDoubleBookings();
+    return () => {
+      cancelled = true;
+    };
   }, [loadDoubleBookings]);
 
   const openBooking = (

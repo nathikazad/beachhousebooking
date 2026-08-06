@@ -1,6 +1,11 @@
 import format from "date-fns/format";
 
 import { BookingDB } from "./bookingType";
+import {
+  readAllOfflineBookings,
+  readOfflineBookingView,
+  writeOfflineBookingView,
+} from "./offlineBookingStore";
 
 interface CalendarCacheEntry {
   bookings: BookingDB[];
@@ -22,6 +27,34 @@ export function calendarViewCacheKey(date: Date): string {
 export function readCalendarViewCache(key: string): BookingDB[] | null {
   const entry = entries.get(key);
   return entry ? structuredClone(entry.bookings) : null;
+}
+
+export async function readPersistentCalendarViewCache(
+  key: string
+): Promise<BookingDB[] | null> {
+  let stored: BookingDB[] | null = null;
+  try {
+    stored = await readOfflineBookingView(`calendar:${key}`);
+  } catch {
+    return null;
+  }
+  if (stored) {
+    entries.set(key, { bookings: structuredClone(stored) });
+    return stored;
+  }
+
+  const [year, month] = key.split("-").map(Number);
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 1).getTime();
+  const bookings = (await readAllOfflineBookings()).filter((booking) => {
+    const status = booking.status.toLocaleLowerCase();
+    return (
+      (status === "confirmed" || status === "preconfirmed") &&
+      new Date(booking.endDateTime).getTime() >= start &&
+      new Date(booking.startDateTime).getTime() < end
+    );
+  });
+  return bookings.length > 0 ? bookings : null;
 }
 
 export function markCalendarViewCacheStale(): void {
@@ -55,6 +88,9 @@ export async function refreshCalendarViewCache(
         entries.set(key, {
           bookings: structuredClone(normalized),
         });
+        void writeOfflineBookingView(`calendar:${key}`, normalized).catch(
+          () => undefined
+        );
       }
 
       return { bookings: normalized, changed };

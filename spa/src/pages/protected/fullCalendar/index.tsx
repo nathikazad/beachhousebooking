@@ -10,6 +10,7 @@ import {
 import {
   calendarViewCacheKey,
   readCalendarViewCache,
+  readPersistentCalendarViewCache,
   refreshCalendarViewCache,
 } from "@/utils/lib/calendarViewCache";
 import { supabase } from "@/utils/supabase/client";
@@ -29,7 +30,11 @@ const FullCalendar = () => {
     monthDate.current = date;
     const key = calendarViewCacheKey(date);
     activeCacheKey.current = key;
-    const cached = readCalendarViewCache(key);
+    let cached = readCalendarViewCache(key);
+    if (!cached) {
+      cached = await readPersistentCalendarViewCache(key);
+      if (activeCacheKey.current !== key) return;
+    }
 
     if (cached) {
       setBookings(cached);
